@@ -1,7 +1,5 @@
 """Kafka producer for StreamForge truck telemetry."""
 
-import json
-
 from confluent_kafka import Producer
 
 from backend.kafka.config import (
@@ -26,19 +24,31 @@ class TelemetryProducer:
     def publish(self, telemetry: Telemetry) -> None:
         """Publish one telemetry event to Kafka."""
 
-        payload = telemetry.model_dump_json()
-
         self.producer.produce(
             topic=TRUCK_TELEMETRY_TOPIC,
             key=telemetry.truck_id,
-            value=payload,
+            value=telemetry.model_dump_json(),
             callback=self._delivery_report,
         )
 
         self.producer.poll(0)
 
+    def publish_batch(self, telemetry_events: list[Telemetry]) -> None:
+        """Publish multiple telemetry events efficiently."""
+
+        for telemetry in telemetry_events:
+            self.producer.produce(
+                topic=TRUCK_TELEMETRY_TOPIC,
+                key=telemetry.truck_id,
+                value=telemetry.model_dump_json(),
+                callback=self._delivery_report,
+            )
+
+        self.producer.flush()
+
     def flush(self) -> None:
         """Wait for pending Kafka messages to be delivered."""
+
         self.producer.flush()
 
     @staticmethod
