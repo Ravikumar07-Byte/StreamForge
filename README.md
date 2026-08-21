@@ -242,3 +242,147 @@ The local Kafka infrastructure was successfully established for StreamForge. The
 
 ```
 ```
+---
+
+## Day 2 — Backend: Truck Telemetry Data Model
+
+### Overview
+
+Day 2 focused on creating the **backend data model** for StreamForge truck telemetry events.
+
+A Pydantic `Telemetry` model was introduced to define and validate the structure of telemetry data before it is sent through the Kafka streaming pipeline.
+
+### Backend Objectives
+
+- Create the truck telemetry data model.
+- Define the required truck identifier.
+- Define the truck temperature field.
+- Automatically generate a UTC timestamp.
+- Validate telemetry input using Pydantic.
+- Serialize telemetry events into JSON.
+- Add automated tests for the telemetry model.
+
+### Telemetry Data Model
+
+The backend telemetry model was created in:
+
+```text
+backend/
+└── models/
+    └── telemetry.py
+
+The model contains three fields:
+
+Field	Type	Purpose
+truck_id	str	Identifies the truck
+temperature	float	Stores truck temperature telemetry
+timestamp	datetime	Records when the telemetry event was created
+Model Implementation
+from datetime import datetime, timezone
+
+
+from pydantic import BaseModel, Field
+
+
+
+
+class Telemetry(BaseModel):
+    """Truck temperature telemetry event."""
+
+
+    truck_id: str = Field(min_length=1)
+    temperature: float
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc)
+    )
+Validation
+
+The truck_id field requires at least one character.
+
+Therefore, an empty truck ID is rejected by the model.
+
+Example:
+
+Telemetry(
+    truck_id="TRUCK-000001",
+    temperature=32.5,
+)
+
+The model automatically creates the timestamp when it is not supplied.
+
+JSON Serialization
+
+The telemetry model supports JSON serialization using Pydantic:
+
+telemetry.model_dump_json()
+
+This allows the validated telemetry object to be converted into a JSON payload suitable for Kafka messaging.
+
+Backend Data Flow
+Truck Telemetry Input
+        │
+        ▼
+Pydantic Telemetry Model
+        │
+        ├── truck_id
+        ├── temperature
+        └── timestamp
+        │
+        ▼
+Validated Telemetry Object
+        │
+        ▼
+JSON Serialization
+        │
+        ▼
+Kafka Producer
+Tests
+
+Tests were added in:
+
+tests/
+└── test_producer.py
+
+The tests verify:
+
+Telemetry object creation
+Truck ID validation
+Temperature value handling
+Automatic timestamp creation
+JSON serialization
+Rejection of an empty truck ID
+Test Result
+
+The telemetry model tests were successfully executed.
+
+3 passed
+
+The complete project test suite at this stage also passed:
+
+4 passed
+Backend Components Completed
+ Truck telemetry Pydantic model
+ Truck ID validation
+ Temperature field
+ Automatic UTC timestamp
+ JSON serialization
+ Telemetry model tests
+ Empty truck ID validation
+ Kafka producer
+ Telemetry generator
+ Kafka consumer
+ Telemetry processing pipeline
+ API layer
+ Database/storage integration
+Git
+
+Commit:
+
+feat: add truck telemetry data model
+
+Commit:
+
+49b2f81
+Day 2 Result
+
+The StreamForge backend now has a validated and testable truck telemetry data model. This provides a consistent structure for telemetry events before they are serialized and published to Kafka.
