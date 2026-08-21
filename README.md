@@ -386,3 +386,165 @@ Commit:
 Day 2 Result
 
 The StreamForge backend now has a validated and testable truck telemetry data model. This provides a consistent structure for telemetry events before they are serialized and published to Kafka.
+
+---
+
+## Day 3 — Backend: Kafka Configuration and Administration
+
+### Overview
+
+Day 3 focused on adding the **Kafka configuration and administration layer** to the StreamForge backend.
+
+The backend was extended with centralized Kafka configuration, topic definitions, and an administration utility for checking Kafka broker availability.
+
+### Backend Objectives
+
+- Create centralized Kafka configuration.
+- Load Kafka settings from environment variables.
+- Define the telemetry Kafka topic through configuration.
+- Create a reusable Kafka `AdminClient`.
+- Add a Kafka broker availability check.
+- Verify the backend can communicate with the local Kafka broker.
+- Maintain automated tests through the existing CI workflow.
+
+### Kafka Configuration
+
+The Kafka configuration was created in:
+
+```text
+backend/
+└── kafka/
+    ├── config.py
+    ├── topics.py
+    └── admin.py
+
+Kafka Environment Configuration
+
+The backend reads Kafka configuration using environment variables.
+
+The default local configuration is:
+
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+KAFKA_TELEMETRY_TOPIC=truck-telemetry
+KAFKA_PRODUCER_CLIENT_ID=streamforge-telemetry-producer
+
+The configuration provides:
+
+Kafka bootstrap server address
+Telemetry topic name
+Producer client ID
+
+Environment variables allow the Kafka configuration to be changed without modifying the backend source code.
+
+Kafka Topic Definition
+
+The telemetry topic is exposed through a backend constant:
+
+from backend.kafka.config import KAFKA_TELEMETRY_TOPIC
+
+
+TRUCK_TELEMETRY_TOPIC = KAFKA_TELEMETRY_TOPIC
+
+This gives the backend a single reusable reference to the truck telemetry topic.
+
+Kafka Administration
+
+A Kafka administration utility was added using confluent_kafka.admin.AdminClient.
+
+The backend provides:
+
+def create_admin_client() -> AdminClient:
+    ...
+
+and:
+
+def kafka_is_available() -> bool:
+    ...
+
+The availability function attempts to communicate with the Kafka broker and returns:
+
+True
+
+when the broker is reachable.
+
+Kafka Availability Verification
+
+The backend Kafka connection was tested using:
+
+python -c "from backend.kafka.admin import kafka_is_available; print('Kafka available:', kafka_is_available())"
+
+The result was:
+
+Kafka available: True
+
+This confirmed that the StreamForge backend could communicate with the local Kafka broker.
+
+Configuration Verification
+
+The configured Kafka values were also verified:
+
+localhost:9092
+truck-telemetry
+Backend Architecture
+StreamForge Backend
+        │
+        ▼
+Kafka Configuration
+        │
+        ├── Bootstrap Server
+        ├── Telemetry Topic
+        └── Producer Client ID
+        │
+        ▼
+Kafka Administration
+        │
+        ▼
+Kafka AdminClient
+        │
+        ▼
+Apache Kafka
+Testing
+
+The existing backend test suite was executed after the Kafka configuration and administration changes.
+
+Test result:
+
+4 passed
+
+The GitHub Actions workflow was also configured to run the test suite using:
+
+python -m pytest
+
+with:
+
+PYTHONPATH=.
+
+This ensures that the backend package can be imported correctly in the CI environment.
+
+Backend Components Completed
+ Centralized Kafka configuration
+ Environment-based Kafka settings
+ Kafka telemetry topic definition
+ Kafka producer client ID configuration
+ Kafka AdminClient utility
+ Kafka broker availability check
+ Local Kafka connectivity verification
+ Automated test execution
+ Kafka producer
+ Telemetry generator
+ Kafka consumer
+ Telemetry processing pipeline
+ API layer
+ Database/storage integration
+Git
+
+Commit:
+
+feat: add Kafka configuration and administration
+
+Commit:
+
+e90e1e1
+Day 3 Result
+
+The StreamForge backend now has a centralized Kafka configuration and administration layer. Kafka connection details and topic definitions are reusable across backend components, while the administration utility provides a simple way to verify Kafka broker availability.
