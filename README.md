@@ -1166,3 +1166,449 @@ git status
 ```
 
 and send me the output. Then I'll give you the **single-cell Git commands** to commit and push Day 5.
+
+Yes. Based on the work you actually completed, **Day 6 = Kafka Consumer & Telemetry Processing**.
+
+Add this **after Day 5** in the same `README.md`:
+
+````markdown
+---
+
+## Day 6 — Backend: Kafka Telemetry Consumer
+
+### Overview
+
+Day 6 focused on implementing the **Kafka consumer** for the StreamForge backend.
+
+The consumer is responsible for reading telemetry messages from the `truck-telemetry` Kafka topic, decoding the JSON payload, validating the data using the Pydantic `Telemetry` model, and returning validated telemetry events to the backend processing layer.
+
+### Backend Objectives
+
+- Create a reusable Kafka telemetry consumer.
+- Connect the consumer to the Kafka broker.
+- Subscribe to the `truck-telemetry` topic.
+- Configure Kafka consumer groups.
+- Support configurable offset behavior.
+- Poll Kafka for telemetry messages.
+- Handle Kafka errors.
+- Decode JSON telemetry payloads.
+- Validate consumed telemetry using Pydantic.
+- Provide a clean consumer shutdown mechanism.
+- Add automated consumer tests.
+- Verify producer-to-consumer message flow using the local Kafka broker.
+
+### Consumer Components Added
+
+The Kafka consumer was created in:
+
+```text
+backend/
+└── kafka/
+    └── consumer.py
+````
+
+The telemetry consumer service was implemented in:
+
+```text
+backend/
+└── consumers/
+    └── telemetry_consumer.py
+```
+
+Tests were added in:
+
+```text
+tests/
+└── test_kafka_consumer.py
+```
+
+### Kafka Consumer
+
+The `TelemetryConsumer` class was introduced to consume truck telemetry events from Kafka.
+
+```python
+class TelemetryConsumer:
+    """Consume truck telemetry events from Kafka."""
+```
+
+The consumer uses the configured Kafka broker:
+
+```python
+from backend.kafka.config import KAFKA_BOOTSTRAP_SERVERS
+```
+
+and the configured telemetry topic:
+
+```python
+from backend.kafka.topics import TRUCK_TELEMETRY_TOPIC
+```
+
+### Consumer Configuration
+
+The consumer was configured with:
+
+```text
+bootstrap.servers
+group.id
+auto.offset.reset
+enable.auto.commit
+```
+
+The consumer group provides a logical identity for the telemetry-consuming service.
+
+The default consumer group is:
+
+```text
+streamforge-telemetry-consumer
+```
+
+The consumer also supports configurable offset behavior:
+
+```python
+auto_offset_reset: str = "earliest"
+```
+
+This allows the consumer to start from the earliest available message when using a new consumer group.
+
+### Topic Subscription
+
+The consumer subscribes to the StreamForge telemetry topic:
+
+```python
+self.consumer.subscribe([TRUCK_TELEMETRY_TOPIC])
+```
+
+Therefore, the consumer listens to:
+
+```text
+truck-telemetry
+```
+
+### Consuming a Message
+
+A `consume_one()` method was implemented:
+
+```python
+def consume_one(self, timeout: float = 5.0) -> Telemetry | None:
+```
+
+The method polls Kafka for a message.
+
+If no message is available within the configured timeout, it returns:
+
+```text
+None
+```
+
+When a message is received, the consumer checks for Kafka errors before processing the payload.
+
+### JSON Decoding
+
+Kafka message values are received as bytes.
+
+The consumer decodes the message using UTF-8:
+
+```python
+payload = json.loads(message.value().decode("utf-8"))
+```
+
+This converts the Kafka JSON payload into a Python dictionary.
+
+### Pydantic Validation
+
+After decoding the Kafka message, the payload is validated using the existing `Telemetry` model:
+
+```python
+return Telemetry.model_validate(payload)
+```
+
+This ensures that telemetry received from Kafka follows the same data structure defined during Day 2.
+
+### Consumer Data Flow
+
+```text
+Apache Kafka
+     │
+     ▼
+truck-telemetry Topic
+     │
+     ▼
+Kafka Consumer
+     │
+     ▼
+Poll Message
+     │
+     ▼
+Decode JSON
+     │
+     ▼
+Pydantic Validation
+     │
+     ▼
+Telemetry Object
+     │
+     ▼
+Backend Processing
+```
+
+### Consumer Service
+
+A continuous telemetry consumer service was implemented in:
+
+```text
+backend/
+└── consumers/
+    └── telemetry_consumer.py
+```
+
+The service creates a telemetry consumer using:
+
+```python
+consumer = TelemetryConsumer(
+    group_id="streamforge-telemetry-service"
+)
+```
+
+It continuously polls Kafka for new telemetry events.
+
+When a valid telemetry event is received, the service prints:
+
+```text
+Received telemetry:
+truck=<truck_id>,
+temperature=<temperature>,
+timestamp=<timestamp>
+```
+
+### Graceful Shutdown
+
+The consumer service handles `KeyboardInterrupt` so that the consumer can be stopped cleanly.
+
+The consumer is closed in the `finally` block:
+
+```python
+consumer.close()
+```
+
+This ensures that Kafka consumer resources are released when the service stops.
+
+### Consumer Test
+
+A test was added in:
+
+```text
+tests/
+└── test_kafka_consumer.py
+```
+
+The test verifies that the Kafka consumer can be created successfully.
+
+Example:
+
+```python
+consumer = TelemetryConsumer(
+    group_id="streamforge-test-consumer"
+)
+
+assert consumer is not None
+
+consumer.close()
+```
+
+### Automated Test Result
+
+The complete backend test suite was executed after the consumer implementation.
+
+```text
+9 passed
+```
+
+The test suite included:
+
+```text
+tests/test_api.py
+tests/test_kafka_consumer.py
+tests/test_kafka_producer.py
+tests/test_producer.py
+tests/test_telemetry_generator.py
+```
+
+### Producer-to-Consumer Verification
+
+The Kafka producer was used to publish a telemetry event:
+
+```text
+truck_id: TRUCK-CONSUMER-001
+temperature: 29.5
+```
+
+The producer confirmed successful delivery:
+
+```text
+Kafka message delivered:
+topic=truck-telemetry
+partition=0
+offset=254
+```
+
+The Kafka console consumer confirmed the exact message:
+
+```json
+{
+  "truck_id": "TRUCK-CONSUMER-001",
+  "temperature": 29.5,
+  "timestamp": "2026-08-21T16:29:59.313292Z"
+}
+```
+
+This verified that telemetry events were successfully written to the Kafka topic.
+
+### Consumer Verification
+
+The StreamForge `TelemetryConsumer` was then used to consume telemetry from Kafka.
+
+A consumed telemetry object was successfully returned:
+
+```text
+{
+    'truck_id': 'TRUCK-000001',
+    'temperature': 32.5,
+    'timestamp': datetime(...)
+}
+```
+
+This confirmed that the consumer could:
+
+* Connect to Kafka.
+* Subscribe to the telemetry topic.
+* Poll messages.
+* Decode JSON.
+* Validate telemetry.
+* Return a `Telemetry` object.
+
+### Latest Message Verification
+
+The consumer was also tested using:
+
+```text
+auto_offset_reset="latest"
+```
+
+The consumer initially waited for a new message:
+
+```text
+Consumer ready - waiting for new message...
+No new message received
+```
+
+After a new telemetry event was published, the consumer successfully received:
+
+```text
+{
+    'truck_id': 'TRUCK-DAY6-LATEST',
+    'temperature': 26.4,
+    'timestamp': datetime(...)
+}
+```
+
+This confirmed that the consumer can wait for and process newly arriving Kafka telemetry events.
+
+### Backend Streaming Architecture
+
+At the end of Day 6, the backend streaming flow was:
+
+```text
+Telemetry Generator
+        │
+        ▼
+Telemetry Pydantic Model
+        │
+        ▼
+Kafka Producer
+        │
+        ▼
+Apache Kafka
+        │
+        ▼
+truck-telemetry
+        │
+        ▼
+Kafka Consumer
+        │
+        ▼
+JSON Decoding
+        │
+        ▼
+Pydantic Validation
+        │
+        ▼
+Validated Telemetry
+        │
+        ▼
+Telemetry Consumer Service
+```
+
+### Backend Components Completed
+
+* [x] Kafka infrastructure
+* [x] Kafka configuration
+* [x] Kafka administration
+* [x] Telemetry Pydantic model
+* [x] Kafka telemetry producer
+* [x] Telemetry generator
+* [x] Benchmarking utility
+* [x] Kafka telemetry consumer
+* [x] Consumer group configuration
+* [x] Configurable offset behavior
+* [x] JSON message decoding
+* [x] Pydantic telemetry validation
+* [x] Consumer service
+* [x] Graceful consumer shutdown
+* [x] Kafka consumer tests
+* [x] Producer-to-consumer verification
+* [ ] API layer
+* [ ] Database/storage integration
+* [ ] Monitoring and observability
+* [ ] Production deployment
+
+### Day 6 Test Result
+
+The complete project test suite passed successfully:
+
+```text
+9 passed in 0.49s
+```
+
+The producer and consumer were also manually verified against the running local Kafka broker.
+
+### Git
+
+Implementation commit:
+
+```text
+feat: add Kafka telemetry consumer
+```
+
+Commit:
+
+```text
+a4f17d3
+```
+
+### Day 6 Result
+
+The StreamForge backend now has a working **Kafka producer-to-consumer streaming path**.
+
+Telemetry can be generated, validated, published to Kafka, consumed from the `truck-telemetry` topic, decoded from JSON, and validated again before being passed to the backend consumer service.
+
+The project is now ready for the final **Day 7 integration, validation, and project completion stage**.
+
+````
+
+After pasting it into `README.md`, run:
+
+```powershell
+git status
+````
+
+Send me the output, and I'll give you the **single-cell Day 6 commit + push commands**.
