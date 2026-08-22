@@ -858,3 +858,311 @@ The telemetry producer successfully converts Pydantic telemetry objects into JSO
 
 ```
 ```
+
+Yes. **Day 5 should be the telemetry generator + benchmarking stage**, based on the actual work already completed in your repository.
+
+Since you want the README to have **one documentation commit per day**, add the following **after Day 4** in `README.md`.
+
+````markdown
+---
+
+## Day 5 — Backend: Telemetry Generator and Benchmarking
+
+### Overview
+
+Day 5 focused on building the **telemetry generation and benchmarking layer** for the StreamForge backend.
+
+The purpose of this stage was to generate realistic truck temperature telemetry events and provide a reusable way to publish multiple events through the Kafka producer.
+
+A benchmarking utility was also added to measure telemetry publishing performance.
+
+### Backend Objectives
+
+- Create a reusable telemetry generator.
+- Generate telemetry events for multiple trucks.
+- Generate realistic temperature values.
+- Reuse the existing Pydantic `Telemetry` model.
+- Connect the telemetry generator with the Kafka producer.
+- Support configurable numbers of telemetry events.
+- Add automated tests for telemetry generation.
+- Create a benchmarking utility.
+- Measure telemetry publishing performance.
+- Verify the generated events can be published to Kafka.
+
+### Backend Components Added
+
+The following backend components were added during Day 5:
+
+```text
+backend/
+├── producers/
+│   ├── telemetry_generator.py
+│   └── benchmark.py
+│
+└── kafka/
+    └── producer.py
+````
+
+Tests were added in:
+
+```text
+tests/
+└── test_telemetry_generator.py
+```
+
+### Telemetry Generator
+
+The telemetry generator provides a reusable mechanism for creating truck telemetry events.
+
+The generator uses the existing `Telemetry` Pydantic model:
+
+```text
+Telemetry
+    │
+    ├── truck_id
+    ├── temperature
+    └── timestamp
+```
+
+Generated telemetry events follow the same validated structure used by the Kafka producer.
+
+### Telemetry Generation Flow
+
+```text
+Truck IDs
+    │
+    ▼
+Telemetry Generator
+    │
+    ├── Generate truck ID
+    ├── Generate temperature
+    └── Generate timestamp
+    │
+    ▼
+Telemetry Model
+    │
+    ▼
+Validated Telemetry Event
+    │
+    ▼
+Kafka Producer
+    │
+    ▼
+truck-telemetry
+```
+
+### Multiple Truck Support
+
+The generator was designed to support telemetry generation for multiple trucks.
+
+Example truck identifiers:
+
+```text
+TRUCK-000001
+TRUCK-000002
+TRUCK-000003
+TRUCK-000004
+...
+```
+
+This allows the StreamForge backend to simulate telemetry arriving from a fleet of trucks instead of a single vehicle.
+
+### Temperature Generation
+
+The generator creates temperature telemetry values that can be used to simulate real-time truck temperature measurements.
+
+Each generated event contains:
+
+```text
+truck_id
+temperature
+timestamp
+```
+
+Example:
+
+```json
+{
+  "truck_id": "TRUCK-000001",
+  "temperature": 32.5,
+  "timestamp": "2026-08-20T10:00:00Z"
+}
+```
+
+### Integration with Kafka Producer
+
+The telemetry generator works together with the Kafka producer implemented during Day 4.
+
+The overall backend pipeline is:
+
+```text
+Telemetry Generator
+        │
+        ▼
+Telemetry Pydantic Model
+        │
+        ▼
+TelemetryProducer
+        │
+        ▼
+Apache Kafka
+        │
+        ▼
+truck-telemetry
+```
+
+This creates the first complete telemetry generation and publishing workflow in StreamForge.
+
+### Benchmarking
+
+A benchmarking utility was created in:
+
+```text
+backend/
+└── producers/
+    └── benchmark.py
+```
+
+The benchmark is intended to measure the performance of telemetry publishing.
+
+The benchmarking process measures the time required to generate and publish telemetry events through the Kafka producer.
+
+### Benchmark Flow
+
+```text
+Start Benchmark
+       │
+       ▼
+Generate Telemetry Events
+       │
+       ▼
+Publish Events to Kafka
+       │
+       ▼
+Flush Producer
+       │
+       ▼
+Calculate Publishing Time
+       │
+       ▼
+Benchmark Result
+```
+
+### Testing
+
+Telemetry generator tests were added in:
+
+```text
+tests/
+└── test_telemetry_generator.py
+```
+
+The tests verify the telemetry generation functionality and ensure that generated telemetry objects contain the expected structure.
+
+### Test Result
+
+The complete backend test suite was executed after the Day 5 changes.
+
+```text
+6 passed
+```
+
+The telemetry generator tests passed successfully.
+
+### Backend Components Completed
+
+* [x] Kafka infrastructure
+* [x] Kafka configuration
+* [x] Kafka administration
+* [x] Telemetry Pydantic model
+* [x] Kafka telemetry producer
+* [x] Telemetry generator
+* [x] Multiple truck telemetry generation
+* [x] Temperature telemetry generation
+* [x] Telemetry generator tests
+* [x] Kafka publishing integration
+* [x] Benchmarking utility
+* [ ] Kafka consumer
+* [ ] Telemetry processing pipeline
+* [ ] API layer
+* [ ] Database/storage integration
+* [ ] Monitoring and observability
+* [ ] Production deployment
+
+### Backend Progress
+
+At the end of Day 5, the backend streaming flow had progressed to:
+
+```text
+Truck Telemetry Generator
+          │
+          ▼
+   Pydantic Validation
+          │
+          ▼
+    Kafka Producer
+          │
+          ▼
+   Apache Kafka
+          │
+          ▼
+ truck-telemetry Topic
+          │
+          ▼
+    Kafka Consumer
+```
+
+The producer side of the streaming pipeline was therefore ready for the consumer and processing stages.
+
+### Git
+
+Implementation commit:
+
+```text
+feat: add telemetry generator and benchmark
+```
+
+Commit:
+
+```text
+3abc135
+```
+
+### Day 5 Result
+
+The StreamForge backend can now **generate telemetry events for multiple trucks and publish them through the Kafka producer**.
+
+A benchmarking utility was also introduced to evaluate telemetry publishing performance.
+
+The project is now ready to proceed to the **Kafka consumer and telemetry processing stage**.
+
+````
+
+### Important
+
+For the README, **don't create another file**. Continue using the same:
+
+```text
+README.md
+````
+
+So your documentation sequence remains:
+
+```text
+Day 0 → README
+Day 1 → README
+Day 2 → README
+Day 3 → README
+Day 4 → README
+Day 5 → README
+Day 6 → README
+Day 7 → README
+```
+
+After you paste Day 5 into the README, run:
+
+```powershell
+git status
+```
+
+and send me the output. Then I'll give you the **single-cell Git commands** to commit and push Day 5.
