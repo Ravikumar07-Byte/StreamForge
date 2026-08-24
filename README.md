@@ -2228,3 +2228,392 @@ The complete local telemetry pipeline has been implemented and verified, with th
 **Kafka producer-to-consumer flow: VERIFIED**
 
 **Remaining platform work: API, storage, monitoring, frontend, and production deployment**
+---
+
+## Day 8 — Backend: Telemetry Stream Processing
+
+### Overview
+
+Day 8 focused on establishing the first **telemetry stream processing layer** for StreamForge.
+
+The backend was extended with reusable processing components for filtering, transforming, and grouping truck telemetry events before further downstream processing.
+
+### Backend Objectives
+
+- Add telemetry temperature validation.
+- Filter invalid telemetry events.
+- Normalize telemetry temperature values.
+- Process individual telemetry events.
+- Process batches of telemetry events.
+- Group telemetry events by truck.
+- Group telemetry events into one-minute windows.
+- Add automated tests for the streaming processing layer.
+- Verify that the existing Kafka pipeline remains functional.
+
+### Streaming Components
+
+The following modules were implemented:
+
+```text
+backend/
+└── streaming/
+    ├── dataflow.py
+    ├── filters.py
+    ├── transformations.py
+    └── windowing.py
+Perfect. ✅ **Day 8 implementation is successfully committed and pushed.**
+
+Your GitHub history now has:
+
+```text
+d597347 feat: add telemetry stream processing pipeline
+a3c5ba6 docs: add StreamForge Day 7 backend documentation
+32d9144 test: add end-to-end telemetry pipeline test
+2ba60ed docs: add StreamForge Day 6 backend documentation
+...
+```
+
+And:
+
+```text
+nothing to commit, working tree clean
+```
+
+So the **implementation commit is complete**.
+
+### Next: Day 8 documentation commit
+
+Now we need to add the **Day 8 documentation to `README.md`** as a **separate commit**.
+
+Add this at the end of your README:
+
+````markdown
+---
+
+## Day 8 — Backend: Telemetry Stream Processing
+
+### Overview
+
+Day 8 focused on establishing the first **telemetry stream processing layer** for StreamForge.
+
+The backend was extended with reusable processing components for filtering, transforming, and grouping truck telemetry events before further downstream processing.
+
+### Backend Objectives
+
+- Add telemetry temperature validation.
+- Filter invalid telemetry events.
+- Normalize telemetry temperature values.
+- Process individual telemetry events.
+- Process batches of telemetry events.
+- Group telemetry events by truck.
+- Group telemetry events into one-minute windows.
+- Add automated tests for the streaming processing layer.
+- Verify that the existing Kafka pipeline remains functional.
+
+### Streaming Components
+
+The following modules were implemented:
+
+```text
+backend/
+└── streaming/
+    ├── dataflow.py
+    ├── filters.py
+    ├── transformations.py
+    └── windowing.py
+````
+
+### Telemetry Filtering
+
+The filtering layer validates the temperature value of each telemetry event.
+
+The accepted temperature range is:
+
+```text
+-50.0 °C to 100.0 °C
+```
+
+Telemetry outside this range is rejected from further processing.
+
+The filtering logic is implemented in:
+
+```text
+backend/streaming/filters.py
+```
+
+The main functions are:
+
+```python
+is_valid_temperature()
+filter_telemetry()
+```
+
+### Telemetry Transformation
+
+A transformation layer was added to normalize telemetry temperature values.
+
+Temperature values are rounded to two decimal places.
+
+Example:
+
+```text
+25.678
+```
+
+becomes:
+
+```text
+25.68
+```
+
+The transformation logic is implemented in:
+
+```text
+backend/streaming/transformations.py
+```
+
+The main functions are:
+
+```python
+normalize_temperature()
+transform_telemetry()
+```
+
+### Telemetry Dataflow
+
+A simple processing dataflow was introduced to process telemetry events through the filtering and transformation stages.
+
+```text
+Telemetry Input
+       │
+       ▼
+Temperature Validation
+       │
+       ├── Invalid ──► Discard
+       │
+       ▼
+Temperature Transformation
+       │
+       ▼
+Processed Telemetry
+```
+
+The dataflow implementation is located in:
+
+```text
+backend/streaming/dataflow.py
+```
+
+The main functions are:
+
+```python
+process_telemetry()
+process_batch()
+```
+
+### Batch Processing
+
+The backend can process multiple telemetry events as a batch.
+
+Valid events continue through the pipeline, while invalid events are removed.
+
+Example:
+
+```text
+Input:
+
+TRUCK-001 → 25.0 °C
+TRUCK-002 → 150.0 °C
+
+        │
+        ▼
+
+Processing
+
+        │
+        ▼
+
+Output:
+
+TRUCK-001 → 25.0 °C
+```
+
+### Telemetry Windowing
+
+A basic windowing layer was added for grouping telemetry events.
+
+The implementation supports:
+
+* Grouping events by truck ID.
+* Grouping events into one-minute time windows.
+
+The windowing logic is implemented in:
+
+```text
+backend/streaming/windowing.py
+```
+
+### Grouping by Truck
+
+Telemetry events can be grouped using the truck identifier:
+
+```text
+TRUCK-001
+   ├── Telemetry Event 1
+   └── Telemetry Event 2
+
+TRUCK-002
+   └── Telemetry Event 1
+```
+
+This provides the foundation for future per-truck stream analytics.
+
+### One-Minute Windows
+
+Telemetry timestamps are normalized to the beginning of their minute.
+
+For example:
+
+```text
+12:30:10
+12:30:45
+```
+
+are grouped into:
+
+```text
+12:30:00
+```
+
+This provides the foundation for future window-based telemetry analysis.
+
+### Backend Processing Flow
+
+```text
+Truck Telemetry
+       │
+       ▼
+Kafka Consumer
+       │
+       ▼
+Telemetry Model
+       │
+       ▼
+Filtering
+       │
+       ▼
+Transformation
+       │
+       ▼
+Windowing / Grouping
+       │
+       ▼
+Processed Telemetry
+```
+
+### Tests
+
+Day 8 introduced:
+
+```text
+tests/
+└── test_streaming.py
+```
+
+The tests verify:
+
+* Valid temperature detection.
+* Invalid temperature detection.
+* Invalid telemetry filtering.
+* Temperature normalization.
+* Single telemetry processing.
+* Batch telemetry processing.
+* Grouping telemetry by truck.
+* Grouping telemetry by minute.
+
+### Day 8 Test Result
+
+The Day 8 streaming tests passed successfully:
+
+```text
+7 passed
+```
+
+The complete StreamForge test suite was also executed.
+
+Final result:
+
+```text
+17 passed in 0.76s
+```
+
+This confirms that the new streaming processing layer did not break the existing Kafka, producer, consumer, telemetry model, generator, or integration functionality.
+
+### Backend Components Completed
+
+* [x] Kafka infrastructure
+* [x] Telemetry data model
+* [x] Kafka configuration
+* [x] Kafka producer
+* [x] Kafka consumer
+* [x] Telemetry generator
+* [x] End-to-end Kafka pipeline
+* [x] Temperature filtering
+* [x] Temperature transformation
+* [x] Batch processing
+* [x] Truck-based grouping
+* [x] One-minute windowing
+* [x] Streaming processing tests
+* [ ] Persistent state processing
+* [ ] RocksDB state integration
+* [ ] Prometheus metrics integration
+* [ ] Advanced stream processing
+* [ ] Production deployment
+
+### Git
+
+Implementation commit:
+
+```text
+feat: add telemetry stream processing pipeline
+```
+
+Commit:
+
+```text
+d597347
+```
+
+### Day 8 Result
+
+The StreamForge backend now contains a **testable telemetry stream processing foundation**.
+
+Telemetry events can be validated, filtered, transformed, processed in batches, grouped by truck, and organized into one-minute windows.
+
+This establishes the foundation for the next stages involving **state management, metrics, and more advanced stream processing**.
+
+````
+
+After pasting it, run:
+
+```powershell
+git status
+git add README.md
+git status
+git commit -m "docs: add StreamForge Day 8 backend documentation"
+git push origin main
+git status
+git log --oneline -10
+````
+
+This gives you the desired separation:
+
+```text
+Day 8 implementation
+        ↓
+d597347 feat: add telemetry stream processing pipeline
+
+Day 8 documentation
+        ↓
+docs: add StreamForge Day 8 backend documentation
+```
