@@ -32,14 +32,30 @@ jobs:
       - name: Start Kafka
         run: |
           docker compose up -d
-          sleep 10
-          docker compose ps
+
+      - name: Wait for Kafka
+        run: |
+          for i in {1..30}; do
+            if docker exec streamforge-kafka \
+              /opt/kafka/bin/kafka-topics.sh \
+              --list \
+              --bootstrap-server localhost:9092 \
+              | grep -q "truck-telemetry"; then
+              echo "Kafka is ready."
+              break
+            fi
+
+            echo "Waiting for Kafka... attempt /30"
+            sleep 2
+          done
 
       - name: Verify Kafka
         run: |
+          docker compose ps
           docker exec streamforge-kafka \
             /opt/kafka/bin/kafka-topics.sh \
-            --list \
+            --describe \
+            --topic truck-telemetry \
             --bootstrap-server localhost:9092
 
       - name: Run tests
