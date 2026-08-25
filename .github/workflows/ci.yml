@@ -29,6 +29,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Start Kafka
+        run: |
+          docker compose up -d
+          sleep 10
+          docker compose ps
+
+      - name: Verify Kafka
+        run: |
+          docker exec streamforge-kafka \
+            /opt/kafka/bin/kafka-topics.sh \
+            --list \
+            --bootstrap-server localhost:9092
+
       - name: Run tests
         run: |
           python -m pytest
