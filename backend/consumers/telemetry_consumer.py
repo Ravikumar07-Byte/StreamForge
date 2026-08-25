@@ -1,5 +1,6 @@
 """Run the StreamForge telemetry consumer."""
 
+from backend.api.routes.telemetry import add_telemetry
 from backend.kafka.consumer import TelemetryConsumer
 
 
@@ -18,6 +19,10 @@ def run() -> None:
 
             if telemetry is None:
                 continue
+
+            # Store the real Kafka telemetry event
+            # so the FastAPI dashboard endpoint can access it.
+            add_telemetry(telemetry)
 
             print(
                 f"Received telemetry: "
