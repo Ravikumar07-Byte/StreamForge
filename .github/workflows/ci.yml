@@ -39,15 +39,30 @@ jobs:
             if docker exec streamforge-kafka \
               /opt/kafka/bin/kafka-topics.sh \
               --list \
-              --bootstrap-server localhost:9092 \
-              | grep -q "truck-telemetry"; then
+              --bootstrap-server localhost:9092 >/dev/null 2>&1; then
               echo "Kafka is ready."
-              break
+              exit 0
             fi
 
             echo "Waiting for Kafka... attempt /30"
             sleep 2
           done
+
+          echo "Kafka did not become ready."
+          docker compose ps
+          docker logs streamforge-kafka
+          exit 1
+
+      - name: Create Kafka topic
+        run: |
+          docker exec streamforge-kafka \
+            /opt/kafka/bin/kafka-topics.sh \
+            --create \
+            --if-not-exists \
+            --topic truck-telemetry \
+            --partitions 4 \
+            --replication-factor 1 \
+            --bootstrap-server localhost:9092
 
       - name: Verify Kafka
         run: |
