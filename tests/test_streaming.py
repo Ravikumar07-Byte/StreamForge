@@ -94,3 +94,355 @@ def test_group_by_minute():
 
     assert len(grouped) == 1
     assert len(next(iter(grouped.values()))) == 2
+
+def test_five_minute_window_start():
+    telemetry = Telemetry(
+        truck_id="TRUCK-001",
+        temperature=25.0,
+        timestamp=datetime(
+            2026,
+            8,
+            24,
+            12,
+            34,
+            30,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    from backend.streaming.windowing import get_five_minute_window_start
+
+    window_start = get_five_minute_window_start(telemetry.timestamp)
+
+    assert window_start == datetime(
+        2026,
+        8,
+        24,
+        12,
+        30,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+
+def test_group_by_truck_and_five_minutes():
+    from backend.streaming.windowing import group_by_truck_and_five_minutes
+
+    events = [
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=20.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                30,
+                10,
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=22.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                34,
+                50,
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=30.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                35,
+                5,
+                tzinfo=timezone.utc,
+            ),
+        ),
+    ]
+
+    grouped = group_by_truck_and_five_minutes(events)
+
+    assert len(grouped) == 2
+
+    first_window = (
+        "TRUCK-001",
+        datetime(
+            2026,
+            8,
+            24,
+            12,
+            30,
+            0,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    second_window = (
+        "TRUCK-001",
+        datetime(
+            2026,
+            8,
+            24,
+            12,
+            35,
+            0,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    assert len(grouped[first_window]) == 2
+    assert len(grouped[second_window]) == 1
+
+
+def test_calculate_five_minute_temperature_average():
+    from backend.streaming.windowing import calculate_five_minute_averages
+
+    events = [
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=20.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                30,
+                10,
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=22.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                32,
+                20,
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=24.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                34,
+                50,
+                tzinfo=timezone.utc,
+            ),
+        ),
+    ]
+
+    results = calculate_five_minute_averages(events)
+
+    assert len(results) == 1
+
+    result = results[0]
+
+    assert result["truck_id"] == "TRUCK-001"
+    assert result["temperature_average"] == 22.0
+    assert result["event_count"] == 3
+    assert result["window_start"] == datetime(
+        2026,
+        8,
+        24,
+        12,
+        30,
+        0,
+        tzinfo=timezone.utc,
+    )
+    assert result["window_end"] == datetime(
+        2026,
+        8,
+        24,
+        12,
+        35,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+
+def test_five_minute_window_handles_hour_boundary():
+    from backend.streaming.windowing import calculate_five_minute_averages
+
+    event = Telemetry(
+        truck_id="TRUCK-001",
+        temperature=70.0,
+        timestamp=datetime(
+            2026,
+            8,
+            24,
+            12,
+            59,
+            30,
+            tzinfo=timezone.utc,
+        ),
+    )
+
+    results = calculate_five_minute_averages([event])
+
+    assert results[0]["window_start"] == datetime(
+        2026,
+        8,
+        24,
+        12,
+        55,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    assert results[0]["window_end"] == datetime(
+        2026,
+        8,
+        24,
+        13,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+def test_late_event_detection():
+    from backend.streaming.windowing import is_late_event
+
+    watermark = datetime(
+        2026,
+        8,
+        24,
+        12,
+        35,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    on_time_event = datetime(
+        2026,
+        8,
+        24,
+        12,
+        34,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    late_event = datetime(
+        2026,
+        8,
+        24,
+        12,
+        33,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    assert is_late_event(
+        on_time_event,
+        watermark,
+        allowed_lateness_seconds=60,
+    ) is False
+
+    assert is_late_event(
+        late_event,
+        watermark,
+        allowed_lateness_seconds=60,
+    ) is True
+
+
+def test_separate_late_events():
+    from backend.streaming.windowing import separate_late_events
+
+    events = [
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=25.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                34,
+                30,
+                tzinfo=timezone.utc,
+            ),
+        ),
+        Telemetry(
+            truck_id="TRUCK-001",
+            temperature=26.0,
+            timestamp=datetime(
+                2026,
+                8,
+                24,
+                12,
+                33,
+                0,
+                tzinfo=timezone.utc,
+            ),
+        ),
+    ]
+
+    watermark = datetime(
+        2026,
+        8,
+        24,
+        12,
+        35,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    on_time, late = separate_late_events(
+        events,
+        watermark,
+        allowed_lateness_seconds=60,
+    )
+
+    assert len(on_time) == 1
+    assert len(late) == 1
+
+    assert on_time[0].temperature == 25.0
+    assert late[0].temperature == 26.0
+
+
+def test_late_event_still_belongs_to_original_event_time_window():
+    from backend.streaming.windowing import (
+        get_five_minute_window_start,
+    )
+
+    late_event_timestamp = datetime(
+        2026,
+        8,
+        24,
+        12,
+        33,
+        0,
+        tzinfo=timezone.utc,
+    )
+
+    window_start = get_five_minute_window_start(
+        late_event_timestamp
+    )
+
+    assert window_start == datetime(
+        2026,
+        8,
+        24,
+        12,
+        30,
+        0,
+        tzinfo=timezone.utc,
+    )
