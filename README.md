@@ -2617,3 +2617,40 @@ Day 8 documentation
         ↓
 docs: add StreamForge Day 8 backend documentation
 ```
+## Day 9 — Backend API and Kafka Consumer Integration
+
+### Objective
+
+Integrate the Kafka telemetry consumer with the backend API so that real truck telemetry events consumed from Kafka can be made available to the application.
+
+### Work Completed
+
+- Added the FastAPI backend application entry point.
+- Added a backend health-check endpoint.
+- Added a telemetry API route.
+- Connected the Kafka telemetry consumer with the backend telemetry API.
+- Updated the telemetry consumer to forward consumed Kafka events to the backend telemetry store.
+- Enabled the backend to expose received telemetry data through an API endpoint.
+- Prepared the backend API for integration with the frontend dashboard.
+
+### Backend Components
+
+- `backend/api/main.py`
+- `backend/api/routes/health.py`
+- `backend/api/routes/telemetry.py`
+- `backend/consumers/telemetry_consumer.py`
+
+### Data Flow
+
+```text
+Kafka
+  ↓
+Telemetry Consumer
+  ↓
+Consumed Telemetry Event
+  ↓
+Backend Telemetry Store
+  ↓
+FastAPI Telemetry API
+  ↓
+Frontend Dashboard
