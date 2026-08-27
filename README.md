@@ -2727,3 +2727,115 @@ Result
 
 The StreamForge backend can now aggregate truck telemetry using five-minute event-time windows and calculate temperature statistics for each truck and window.
 
+
+## Day 11 - Late-Event Handling and Dataflow Integration
+
+### Objective
+
+Integrate five-minute event-time windowing into the telemetry streaming dataflow and handle telemetry events that arrive later than the allowed lateness threshold.
+
+### Work Completed
+
+- Added event-time watermark handling.
+- Added configurable allowed lateness for telemetry events.
+- Added late-event detection based on the current watermark.
+- Added separation of on-time and late telemetry events.
+- Integrated telemetry filtering and transformation before window aggregation.
+- Integrated five-minute temperature aggregation into the streaming dataflow.
+- Added `process_five_minute_window()` to coordinate processing, late-event handling, and aggregation.
+- Added tests for late-event detection and separation.
+- Verified the complete backend test suite.
+
+### Backend Components
+
+- `backend/streaming/windowing.py`
+- `backend/streaming/dataflow.py`
+- `tests/test_streaming.py`
+
+### Processing Flow
+
+```text
+Telemetry Events
+      |
+      v
+Filter Invalid Events
+      |
+      v
+Normalize Temperature
+      |
+      v
+Check Event-Time Watermark
+      |
+      +--------------------+
+      |                    |
+      v                    v
+  On-Time Events       Late Events
+      |
+      v
+Five-Minute Event-Time Windows
+      |
+      v
+Group by Truck + Window
+      |
+      v
+Calculate Temperature Average
+      |
+      v
+Window Results
+Late-Event Handling
+
+The streaming pipeline uses a watermark and an allowed lateness threshold to identify events that arrive too late for the current aggregation.
+
+The default allowed lateness is:
+
+60 seconds
+
+For example, with a watermark of:
+
+12:35:00
+
+an event at:
+
+12:34:00
+
+is considered on-time, while an event at:
+
+12:33:00
+
+is considered late when the allowed lateness is 60 seconds.
+
+Dataflow Integration
+
+The new process_five_minute_window() function performs the following operations:
+
+Processes and validates telemetry events.
+Applies temperature transformation.
+Separates late events when a watermark is supplied.
+Aggregates on-time events into five-minute windows.
+Calculates average temperature and event count.
+Returns both window results and late events.
+Verification
+
+The backend streaming implementation was verified with:
+
+24 passed
+
+Tests covered:
+
+Telemetry validation.
+Temperature transformation.
+Batch processing.
+Truck grouping.
+Minute windowing.
+Five-minute windowing.
+Temperature averages.
+Hour-boundary handling.
+Late-event detection.
+Late-event separation.
+Event-time window preservation.
+Kafka producer and consumer functionality.
+End-to-end telemetry flow.
+Result
+
+The StreamForge backend now supports five-minute event-time telemetry aggregation with watermark-based late-event handling and integrated streaming dataflow processing.
+
