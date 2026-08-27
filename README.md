@@ -2654,3 +2654,76 @@ Backend Telemetry Store
 FastAPI Telemetry API
   â†“
 Frontend Dashboard
+
+## Day 10 — Five-Minute Event-Time Windowing
+
+### Objective
+
+Implement event-time based five-minute windowing for truck telemetry so that telemetry events can be grouped and aggregated within fixed five-minute intervals.
+
+### Work Completed
+
+- Added five-minute event-time window calculation.
+- Determined the start of each five-minute window from the telemetry event timestamp.
+- Grouped telemetry events by truck ID and five-minute event-time window.
+- Added five-minute temperature aggregation.
+- Calculated the average temperature for each truck within a five-minute window.
+- Added the number of telemetry events contained in each window.
+- Added window start and window end timestamps to the aggregation result.
+- Correctly handled five-minute windows crossing an hour boundary.
+- Added unit tests covering the new windowing functionality.
+
+### Backend Components
+
+- `backend/streaming/windowing.py`
+- `tests/test_streaming.py`
+
+### Processing Flow
+
+```text
+Telemetry Events
+      ?
+Event Timestamp
+      ?
+Five-Minute Event-Time Window
+      ?
+Group by Truck + Window
+      ?
+Calculate Average Temperature
+      ?
+Window Statistics
+      +-- Truck ID
+      +-- Window Start
+      +-- Window End
+      +-- Average Temperature
+      +-- Event Count
+Example
+
+A telemetry event at:
+
+12:34:30
+
+belongs to:
+
+12:30:00 ? 12:35:00
+
+An event at:
+
+12:59:30
+
+belongs to:
+
+12:55:00 ? 13:00:00
+Verification
+
+The five-minute windowing implementation was tested for:
+
+Window start calculation.
+Truck and five-minute window grouping.
+Temperature average calculation.
+Event counting.
+Hour-boundary handling.
+Result
+
+The StreamForge backend can now aggregate truck telemetry using five-minute event-time windows and calculate temperature statistics for each truck and window.
+
