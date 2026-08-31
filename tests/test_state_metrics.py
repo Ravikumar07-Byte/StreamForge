@@ -14,12 +14,18 @@ from backend.metrics.prometheus import (
     telemetry_events_processed,
     telemetry_events_received,
 )
+from backend.models.telemetry import Telemetry
 from backend.state.recovery import (
     clear_recovery_state,
     load_recovery_state,
     save_recovery_state,
 )
 from backend.state.rocksdb_store import RocksDBStore
+from backend.state.truck_state import (
+    get_truck_timestamp,
+    load_truck_state,
+    save_truck_state,
+)
 
 
 def test_rocksdb_put_and_get(tmp_path: Path):
@@ -40,7 +46,10 @@ def test_rocksdb_put_and_get(tmp_path: Path):
 def test_rocksdb_exists_and_delete(tmp_path: Path):
     store = RocksDBStore(str(tmp_path / "state"))
 
-    store.put("truck:TRUCK-001", {"status": "active"})
+    store.put(
+        "truck:TRUCK-001",
+        {"status": "active"},
+    )
 
     assert store.exists("truck:TRUCK-001") is True
 
@@ -100,10 +109,25 @@ def test_metrics_record_events():
     record_invalid()
     record_late()
 
-    assert telemetry_events_received._value.get() == before_received + 1
-    assert telemetry_events_processed._value.get() == before_processed + 1
-    assert telemetry_events_invalid._value.get() == before_invalid + 1
-    assert telemetry_events_late._value.get() == before_late + 1
+    assert (
+        telemetry_events_received._value.get()
+        == before_received + 1
+    )
+
+    assert (
+        telemetry_events_processed._value.get()
+        == before_processed + 1
+    )
+
+    assert (
+        telemetry_events_invalid._value.get()
+        == before_invalid + 1
+    )
+
+    assert (
+        telemetry_events_late._value.get()
+        == before_late + 1
+    )
 
 
 def test_active_trucks_metric():
@@ -114,3 +138,74 @@ def test_active_trucks_metric():
     set_active_trucks(3)
 
     assert active_trucks._value.get() == 3
+
+
+def test_save_and_load_truck_state(tmp_path: Path):
+    store = RocksDBStore(str(tmp_path / "state"))
+
+    telemetry = Telemetry(
+        truck_id="TRUCK-001",
+        temperature=32.5,
+    )
+
+    save_truck_state(
+        store,
+        telemetry,
+    )
+
+    state = load_truck_state(
+        store,
+        "TRUCK-001",
+    )
+
+    assert state is not None
+    assert state["truck_id"] == "TRUCK-001"
+    assert state["temperature"] == 32.5
+    assert state["timestamp"] == telemetry.timestamp.isoformat()
+
+    store.close()
+
+
+def test_get_truck_timestamp(tmp_path: Path):
+    store = RocksDBStore(str(tmp_path / "state"))
+
+    telemetry = Telemetry(
+        truck_id="TRUCK-002",
+        temperature=29.5,
+    )
+
+    save_truck_state(
+        store,
+        telemetry,
+    )
+
+    timestamp = get_truck_timestamp(
+        store,
+        "TRUCK-002",
+    )
+
+    assert timestamp == telemetry.timestamp
+
+    store.close()
+
+
+def test_missing_truck_state_returns_none(tmp_path: Path):
+    store = RocksDBStore(str(tmp_path / "state"))
+
+    assert (
+        load_truck_state(
+            store,
+            "TRUCK-999",
+        )
+        is None
+    )
+
+    assert (
+        get_truck_timestamp(
+            store,
+            "TRUCK-999",
+        )
+        is None
+    )
+
+    store.close()

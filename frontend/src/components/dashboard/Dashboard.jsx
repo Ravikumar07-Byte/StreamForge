@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  LineChart,
+  CartesianGrid,
   Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
 } from "recharts";
+
+const API_URL = "http://localhost:8000/api/telemetry";
+const REFRESH_INTERVAL = 5000;
 
 function Dashboard() {
   const [telemetry, setTelemetry] = useState([]);
@@ -15,11 +18,11 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setError("");
 
-      const response = await fetch("/api/telemetry");
+      const response = await fetch(API_URL);
 
       if (!response.ok) {
         throw new Error(`Server returned ${response.status}`);
@@ -27,71 +30,65 @@ function Dashboard() {
 
       const data = await response.json();
 
-      /*
-        Expected backend response:
+      setTelemetry(
+        Array.isArray(data.telemetry) ? data.telemetry : []
+      );
 
-        {
-          "kafka_status": "Online",
-          "telemetry": [
-            {
-              "truck": "TRUCK-001",
-              "temperature": 32.1,
-              "timestamp": "10:30"
-            }
-          ]
-        }
-      */
-
-      setTelemetry(Array.isArray(data.telemetry) ? data.telemetry : []);
       setKafkaStatus(data.kafka_status || "Unknown");
     } catch (err) {
       console.error("Dashboard API error:", err);
+
       setError("Unable to connect to StreamForge backend.");
       setKafkaStatus("Offline");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
 
-    // Refresh telemetry every 5 seconds
-    const interval = setInterval(fetchDashboardData, 5000);
+    const interval = setInterval(
+      fetchDashboardData,
+      REFRESH_INTERVAL
+    );
 
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchDashboardData]);
 
-  // Unique trucks
+  // Total unique trucks
   const totalTrucks = useMemo(() => {
-    return new Set(telemetry.map((item) => item.truck)).size;
+    return new Set(
+      telemetry.map((item) => item.truck)
+    ).size;
   }, [telemetry]);
 
-  // Number of telemetry events
+  // Total telemetry events
   const telemetryEvents = telemetry.length;
 
-  // Warning count
+  // Temperature alerts
   const alerts = useMemo(() => {
-    return telemetry.filter((item) => {
-      const temperature = Number(item.temperature);
-
-      return temperature >= 35;
-    }).length;
+    return telemetry.filter(
+      (item) => Number(item.temperature) >= 35
+    ).length;
   }, [telemetry]);
 
   // Chart data
   const chartData = useMemo(() => {
-    return telemetry
-      .slice(-20)
-      .map((item) => ({
-        time: item.timestamp || item.time || "--",
-        temperature: Number(item.temperature),
-      }));
+    return telemetry.slice(-20).map((item) => ({
+      time: item.timestamp
+        ? new Date(item.timestamp).toLocaleTimeString()
+        : "--",
+      temperature: Number(item.temperature),
+      truck: item.truck,
+    }));
   }, [telemetry]);
 
-  // Recent telemetry
+  // Latest 10 events
   const recentTelemetry = useMemo(() => {
-    return [...telemetry].reverse().slice(0, 10);
+    return [...telemetry]
+      .reverse()
+      .slice(0, 10);
   }, [telemetry]);
 
   const getStatus = (temperature) => {
@@ -109,7 +106,9 @@ function Dashboard() {
       <main className="dashboard">
         <section className="welcome-card">
           <h2>Welcome to StreamForge</h2>
-          <p>Connecting to telemetry service...</p>
+          <p>
+            Connecting to the telemetry service...
+          </p>
         </section>
 
         <div className="dashboard-loading">
@@ -125,8 +124,10 @@ function Dashboard() {
       {/* Welcome */}
       <section className="welcome-card">
         <h2>Welcome to StreamForge</h2>
+
         <p>
-          Monitor truck telemetry and streaming activity from one place.
+          Monitor truck telemetry and streaming activity
+          from one place.
         </p>
 
         {error && (
@@ -140,7 +141,9 @@ function Dashboard() {
       <section className="stats-grid">
 
         <div className="stat-card">
-          <span className="stat-label">Total Trucks</span>
+          <span className="stat-label">
+            Total Trucks
+          </span>
 
           <strong>
             {totalTrucks}
@@ -205,8 +208,11 @@ function Dashboard() {
       <section className="dashboard-card chart-card">
 
         <div className="card-header">
+
           <div>
-            <h3>Temperature Monitoring</h3>
+            <h3>
+              Temperature Monitoring
+            </h3>
 
             <p>
               Live truck temperature telemetry
@@ -216,6 +222,7 @@ function Dashboard() {
           <span className="live-indicator">
             ● LIVE
           </span>
+
         </div>
 
         <div className="chart-container">
@@ -225,10 +232,15 @@ function Dashboard() {
               No telemetry data available.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
               <LineChart data={chartData}>
 
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                />
 
                 <XAxis
                   dataKey="time"
@@ -238,7 +250,15 @@ function Dashboard() {
                   domain={["auto", "auto"]}
                 />
 
-                <Tooltip />
+                <Tooltip
+                  formatter={(value) => [
+                    `${value} °C`,
+                    "Temperature",
+                  ]}
+                  labelFormatter={(label) =>
+                    `Time: ${label}`
+                  }
+                />
 
                 <Line
                   type="monotone"
@@ -253,6 +273,7 @@ function Dashboard() {
           )}
 
         </div>
+
       </section>
 
       {/* Recent Telemetry */}
@@ -261,7 +282,9 @@ function Dashboard() {
         <div className="card-header">
 
           <div>
-            <h3>Recent Telemetry</h3>
+            <h3>
+              Recent Telemetry
+            </h3>
 
             <p>
               Latest events received from trucks
@@ -297,44 +320,52 @@ function Dashboard() {
 
               <tbody>
 
-                {recentTelemetry.map((item, index) => {
+                {recentTelemetry.map(
+                  (item, index) => {
+                    const status = getStatus(
+                      item.temperature
+                    );
 
-                  const status = getStatus(item.temperature);
+                    return (
+                      <tr
+                        key={`${item.truck}-${item.timestamp}-${index}`}
+                      >
 
-                  return (
-                    <tr
-                      key={`${item.truck}-${item.timestamp}-${index}`}
-                    >
+                        <td>
+                          {item.truck}
+                        </td>
 
-                      <td>
-                        {item.truck}
-                      </td>
+                        <td>
+                          {Number(
+                            item.temperature
+                          ).toFixed(1)}{" "}
+                          °C
+                        </td>
 
-                      <td>
-                        {Number(item.temperature).toFixed(1)} °C
-                      </td>
+                        <td>
+                          {item.timestamp
+                            ? new Date(
+                                item.timestamp
+                              ).toLocaleString()
+                            : "--"}
+                        </td>
 
-                      <td>
-                        {item.timestamp || item.time || "--"}
-                      </td>
+                        <td>
+                          <span
+                            className={
+                              status === "Warning"
+                                ? "status-badge warning"
+                                : "status-badge normal"
+                            }
+                          >
+                            {status}
+                          </span>
+                        </td>
 
-                      <td>
-
-                        <span
-                          className={
-                            status === "Warning"
-                              ? "status-badge warning"
-                              : "status-badge normal"
-                          }
-                        >
-                          {status}
-                        </span>
-
-                      </td>
-
-                    </tr>
-                  );
-                })}
+                      </tr>
+                    );
+                  }
+                )}
 
               </tbody>
 

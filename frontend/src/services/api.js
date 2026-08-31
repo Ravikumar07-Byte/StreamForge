@@ -1,4 +1,3 @@
-
 import axios from "axios";
 
 const api = axios.create({
@@ -7,5 +6,20 @@ const api = axios.create({
     "Content-Type": "application/json",
   },
 });
+
+export const getTelemetry = async () => {
+  const response = await api.get("/api/telemetry");
+  return response.data;
+};
+
+export const getMetrics = async () => {
+  const response = await api.get("/api/metrics");
+  return response.data;
+};
+
+export const getHealth = async () => {
+  const response = await api.get("/api/health");
+  return response.data;
+};
 
 export default api;
