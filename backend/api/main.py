@@ -17,6 +17,7 @@ from backend.metrics.prometheus import (
     telemetry_events_late,
     telemetry_events_processed,
     telemetry_events_received,
+    set_active_trucks,
 )
 from backend.streaming.dataflow import process_telemetry
 
@@ -70,6 +71,10 @@ def consume_telemetry() -> None:
         auto_offset_reset="latest",
     )
 
+    # Keep track of trucks that have successfully
+    # reported telemetry during this API session.
+    active_truck_ids: set[str] = set()
+
     print("StreamForge API Kafka consumer started.")
 
     try:
@@ -82,15 +87,24 @@ def consume_telemetry() -> None:
                 if telemetry is None:
                     continue
 
+                # -------------------------------------------------
                 # Event received from Kafka
+                # -------------------------------------------------
+
                 record_received()
 
-                # Process telemetry
+                # -------------------------------------------------
+                # Process telemetry through streaming pipeline
+                # -------------------------------------------------
+
                 processed = process_telemetry(
                     telemetry
                 )
 
+                # -------------------------------------------------
                 # Reject invalid telemetry
+                # -------------------------------------------------
+
                 if processed is None:
                     record_invalid()
 
@@ -102,13 +116,31 @@ def consume_telemetry() -> None:
 
                     continue
 
+                # -------------------------------------------------
                 # Successful processing
+                # -------------------------------------------------
+
                 record_processed()
 
+                # Track active trucks
+                active_truck_ids.add(
+                    processed.truck_id
+                )
+
+                set_active_trucks(
+                    len(active_truck_ids)
+                )
+
+                # -------------------------------------------------
                 # Store processed event for dashboard
+                # -------------------------------------------------
+
                 add_telemetry(processed)
 
-                # Commit after successful processing
+                # -------------------------------------------------
+                # Commit only after successful processing
+                # -------------------------------------------------
+
                 consumer.commit()
 
                 print(
