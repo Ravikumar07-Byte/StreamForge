@@ -1,5 +1,6 @@
 """Persistent state storage using RocksDB."""
 
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Optional
 
@@ -30,6 +31,10 @@ class RocksDBStore:
     def exists(self, key: str) -> bool:
         """Return True when a key exists."""
         return key in self.db
+
+    def keys(self) -> Iterator[str]:
+        """Return an iterator over all stored keys."""
+        return iter(self.db.keys())
 
     def close(self) -> None:
         """Close the RocksDB store."""

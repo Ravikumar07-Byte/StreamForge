@@ -22,6 +22,7 @@ from backend.state.recovery import (
 )
 from backend.state.rocksdb_store import RocksDBStore
 from backend.state.truck_state import (
+    get_truck_last_seen,
     get_truck_timestamp,
     load_truck_state,
     save_truck_state,
@@ -162,6 +163,7 @@ def test_save_and_load_truck_state(tmp_path: Path):
     assert state["truck_id"] == "TRUCK-001"
     assert state["temperature"] == 32.5
     assert state["timestamp"] == telemetry.timestamp.isoformat()
+    assert "last_seen_at" in state
 
     store.close()
 
@@ -189,6 +191,30 @@ def test_get_truck_timestamp(tmp_path: Path):
     store.close()
 
 
+def test_get_truck_last_seen(tmp_path: Path):
+    store = RocksDBStore(str(tmp_path / "state"))
+
+    telemetry = Telemetry(
+        truck_id="TRUCK-003",
+        temperature=31.5,
+    )
+
+    save_truck_state(
+        store,
+        telemetry,
+    )
+
+    last_seen_at = get_truck_last_seen(
+        store,
+        "TRUCK-003",
+    )
+
+    assert last_seen_at is not None
+    assert last_seen_at.tzinfo is not None
+
+    store.close()
+
+
 def test_missing_truck_state_returns_none(tmp_path: Path):
     store = RocksDBStore(str(tmp_path / "state"))
 
@@ -202,6 +228,14 @@ def test_missing_truck_state_returns_none(tmp_path: Path):
 
     assert (
         get_truck_timestamp(
+            store,
+            "TRUCK-999",
+        )
+        is None
+    )
+
+    assert (
+        get_truck_last_seen(
             store,
             "TRUCK-999",
         )

@@ -8,34 +8,23 @@ from backend.metrics.prometheus import (
     record_received,
     set_active_trucks,
 )
+from backend.state.metrics_state import (
+    increment_metric,
+    set_metric,
+)
 from backend.state.recovery import (
     load_recovery_state,
     save_recovery_state,
 )
 from backend.state.rocksdb_store import RocksDBStore
-from backend.state.truck_state import save_truck_state
+from backend.state.truck_state import (
+    get_active_trucks,
+    save_truck_state,
+)
 from backend.streaming.dataflow import process_telemetry
 
 
 STATE_PATH = "data/state"
-TRUCK_STATE_PREFIX = "truck:"
-
-
-def load_active_trucks(store: RocksDBStore) -> set[str]:
-    """Restore truck IDs from persisted RocksDB state."""
-
-    active_truck_ids: set[str] = set()
-
-    for key in store.keys():
-        if not key.startswith(TRUCK_STATE_PREFIX):
-            continue
-
-        truck_id = key[len(TRUCK_STATE_PREFIX):]
-
-        if truck_id:
-            active_truck_ids.add(truck_id)
-
-    return active_truck_ids
 
 
 def run() -> None:
@@ -48,9 +37,10 @@ def run() -> None:
 
     store = RocksDBStore(STATE_PATH)
 
-    # Restore previously known trucks from persistent state.
-    active_truck_ids = load_active_trucks(store)
+    # Restore active trucks from persisted last-seen timestamps.
+    active_truck_ids = get_active_trucks(store)
     set_active_trucks(len(active_truck_ids))
+    set_metric(store, "active_trucks", len(active_truck_ids))
 
     if active_truck_ids:
         print(
@@ -58,9 +48,8 @@ def run() -> None:
             f"{len(active_truck_ids)}"
         )
     else:
-        print("No persisted truck state found.")
+        print("No currently active trucks found.")
 
-    # Load the last persisted recovery position.
     recovery_state = load_recovery_state(store)
 
     if recovery_state is not None:
@@ -80,58 +69,80 @@ def run() -> None:
             telemetry = consumer.consume_one(timeout=1.0)
 
             if telemetry is None:
-                continue
+                # Recalculate active trucks periodically even when
+                # no new Kafka event arrives.
+                active_truck_ids = get_active_trucks(store)
 
-            # Record that Kafka delivered an event.
-            record_received()
-
-            # Process the telemetry through the streaming pipeline.
-            processed = process_telemetry(telemetry)
-
-            # Invalid telemetry is rejected by the pipeline.
-            if processed is None:
-                record_invalid()
-
-                print(
-                    f"Invalid telemetry rejected: "
-                    f"truck={telemetry.truck_id}, "
-                    f"temperature={telemetry.temperature}"
+                set_active_trucks(len(active_truck_ids))
+                set_metric(
+                    store,
+                    "active_trucks",
+                    len(active_truck_ids),
                 )
 
                 continue
 
-            # Record successful processing.
+            # Record received event.
+            record_received()
+            increment_metric(
+                store,
+                "events_received",
+            )
+
+            processed = process_telemetry(telemetry)
+
+            if processed is None:
+                record_invalid()
+                increment_metric(
+                    store,
+                    "events_invalid",
+                )
+
+                print(
+                    "Invalid telemetry rejected: "
+                    f"truck={telemetry.truck_id}, "
+                    f"temperature={telemetry.temperature}"
+                )
+                continue
+
+            # Record successfully processed event.
             record_processed()
+            increment_metric(
+                store,
+                "events_processed",
+            )
 
-            # Update the persistent active-truck set.
-            active_truck_ids.add(processed.truck_id)
-            set_active_trucks(len(active_truck_ids))
-
-            # Persist the latest state for this truck.
             save_truck_state(store, processed)
 
-            # Get the Kafka position of this event.
+            # Update active truck count.
+            active_truck_ids = get_active_trucks(store)
+
+            set_active_trucks(len(active_truck_ids))
+            set_metric(
+                store,
+                "active_trucks",
+                len(active_truck_ids),
+            )
+
+            # Save Kafka recovery position.
             position = consumer.get_last_position()
 
             if position is not None:
                 partition, offset = position
 
-                # Persist the processing position.
                 save_recovery_state(
                     store,
                     partition=partition,
                     offset=offset,
                 )
 
-            # Make processed telemetry available to the API/dashboard.
+            # Keep recent telemetry available to the API.
             add_telemetry(processed)
 
-            # Commit Kafka only after successful processing and
-            # persistent state update.
             consumer.commit()
 
             print(
-                f"Processed telemetry: "
+                "Processed telemetry: "
                 f"truck={processed.truck_id}, "
                 f"temperature={processed.temperature}, "
                 f"timestamp={processed.timestamp}"
