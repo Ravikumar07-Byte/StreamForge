@@ -13,10 +13,29 @@ from backend.state.recovery import (
     save_recovery_state,
 )
 from backend.state.rocksdb_store import RocksDBStore
+from backend.state.truck_state import save_truck_state
 from backend.streaming.dataflow import process_telemetry
 
 
 STATE_PATH = "data/state"
+TRUCK_STATE_PREFIX = "truck:"
+
+
+def load_active_trucks(store: RocksDBStore) -> set[str]:
+    """Restore truck IDs from persisted RocksDB state."""
+
+    active_truck_ids: set[str] = set()
+
+    for key in store.keys():
+        if not key.startswith(TRUCK_STATE_PREFIX):
+            continue
+
+        truck_id = key[len(TRUCK_STATE_PREFIX):]
+
+        if truck_id:
+            active_truck_ids.add(truck_id)
+
+    return active_truck_ids
 
 
 def run() -> None:
@@ -29,7 +48,17 @@ def run() -> None:
 
     store = RocksDBStore(STATE_PATH)
 
-    active_truck_ids: set[str] = set()
+    # Restore previously known trucks from persistent state.
+    active_truck_ids = load_active_trucks(store)
+    set_active_trucks(len(active_truck_ids))
+
+    if active_truck_ids:
+        print(
+            "Restored active trucks: "
+            f"{len(active_truck_ids)}"
+        )
+    else:
+        print("No persisted truck state found.")
 
     # Load the last persisted recovery position.
     recovery_state = load_recovery_state(store)
@@ -74,19 +103,12 @@ def run() -> None:
             # Record successful processing.
             record_processed()
 
-            # Keep track of active trucks.
+            # Update the persistent active-truck set.
             active_truck_ids.add(processed.truck_id)
             set_active_trucks(len(active_truck_ids))
 
             # Persist the latest state for this truck.
-            store.put(
-                f"truck:{processed.truck_id}",
-                {
-                    "truck_id": processed.truck_id,
-                    "temperature": processed.temperature,
-                    "timestamp": processed.timestamp.isoformat(),
-                },
-            )
+            save_truck_state(store, processed)
 
             # Get the Kafka position of this event.
             position = consumer.get_last_position()

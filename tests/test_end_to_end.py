@@ -1,6 +1,7 @@
-"""End-to-end Kafka telemetry pipeline test."""
+"""End-to-end Kafka telemetry producer/consumer integration test."""
 
 import time
+import uuid
 
 from backend.kafka.consumer import TelemetryConsumer
 from backend.kafka.producer import TelemetryProducer
@@ -8,7 +9,9 @@ from backend.models.telemetry import Telemetry
 
 
 def test_telemetry_producer_consumer_flow():
-    group_id = "streamforge-day7-integration"
+    """Verify telemetry can be published to Kafka and consumed successfully."""
+
+    group_id = f"streamforge-e2e-{uuid.uuid4().hex[:8]}"
 
     consumer = TelemetryConsumer(
         group_id=group_id,
@@ -18,15 +21,19 @@ def test_telemetry_producer_consumer_flow():
     producer = TelemetryProducer()
 
     try:
-        # Give Kafka time to establish the consumer assignment.
-        for _ in range(10):
+        # Allow Kafka enough time to establish the consumer assignment.
+        assignment_timeout = 15.0
+        start_time = time.monotonic()
+
+        while time.monotonic() - start_time < assignment_timeout:
             consumer.consumer.poll(0.5)
 
             if consumer.consumer.assignment():
                 break
 
         assert consumer.consumer.assignment(), (
-            "Kafka consumer was not assigned any partitions"
+            "Kafka consumer was not assigned any partitions "
+            f"within {assignment_timeout} seconds"
         )
 
         telemetry = Telemetry(
@@ -38,15 +45,24 @@ def test_telemetry_producer_consumer_flow():
         producer.flush()
 
         received = None
+        receive_timeout = 15.0
+        start_time = time.monotonic()
 
-        for _ in range(10):
-            received = consumer.consume_one(timeout=2.0)
+        while time.monotonic() - start_time < receive_timeout:
+            message = consumer.consume_one(timeout=1.0)
 
-            if received is not None:
-                if received.truck_id == telemetry.truck_id:
-                    break
+            if message is None:
+                continue
 
-        assert received is not None
+            if message.truck_id == telemetry.truck_id:
+                received = message
+                break
+
+        assert received is not None, (
+            "Telemetry message was not received from Kafka "
+            f"within {receive_timeout} seconds"
+        )
+
         assert received.truck_id == telemetry.truck_id
         assert received.temperature == telemetry.temperature
         assert received.timestamp is not None
