@@ -23,6 +23,14 @@ class TelemetryConsumer:
                 "group.id": group_id,
                 "auto.offset.reset": auto_offset_reset,
                 "enable.auto.commit": False,
+
+                # Allow longer processing periods before Kafka
+                # considers this consumer inactive.
+                "max.poll.interval.ms": 900000,
+
+                # Keep the consumer session alive while polling.
+                "session.timeout.ms": 45000,
+                "heartbeat.interval.ms": 15000,
             }
         )
 
@@ -32,7 +40,10 @@ class TelemetryConsumer:
         self.last_partition: int | None = None
         self.last_offset: int | None = None
 
-    def consume_one(self, timeout: float = 5.0) -> Telemetry | None:
+    def consume_one(
+        self,
+        timeout: float = 5.0,
+    ) -> Telemetry | None:
         """Consume and validate one telemetry event."""
 
         message = self.consumer.poll(timeout)
@@ -56,9 +67,13 @@ class TelemetryConsumer:
     def commit(self) -> None:
         """Commit the latest consumed Kafka offset."""
 
-        self.consumer.commit(asynchronous=False)
+        self.consumer.commit(
+            asynchronous=False
+        )
 
-    def get_last_position(self) -> tuple[int, int] | None:
+    def get_last_position(
+        self,
+    ) -> tuple[int, int] | None:
         """Return the partition and offset of the latest message."""
 
         if (

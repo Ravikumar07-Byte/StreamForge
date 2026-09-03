@@ -4,31 +4,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes.health import router as health_router
-from backend.api.routes.telemetry import get_persisted_truck_states
-from backend.metrics.prometheus import (
-    active_trucks,
-    telemetry_events_invalid,
-    telemetry_events_late,
-    telemetry_events_processed,
-    telemetry_events_received,
-)
-from backend.state.metrics_state import load_metrics
-from backend.state.rocksdb_store import RocksDBStore
-
-
-STATE_PATH = "data/state"
-
+from backend.state.snapshot import load_snapshot
 
 app = FastAPI(
     title="StreamForge API",
     version="1.0.0",
     description="Real-time truck telemetry streaming API",
 )
-
-
-# ---------------------------------------------------------
-# CORS
-# ---------------------------------------------------------
 
 app.add_middleware(
     CORSMiddleware,
@@ -41,60 +23,39 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(health_router, prefix="/api")
 
-# ---------------------------------------------------------
-# Routes
-# ---------------------------------------------------------
-
-app.include_router(
-    health_router,
-    prefix="/api",
-)
-
-
-# ---------------------------------------------------------
-# Telemetry API
-# ---------------------------------------------------------
 
 @app.get("/api/telemetry")
 def telemetry() -> dict:
-    """Return latest persisted truck telemetry."""
+    """Return the latest dashboard telemetry and active alerts."""
 
-    states = get_persisted_truck_states()
+    snapshot = load_snapshot()
 
     return {
-        "kafka_status": "Online",
-        "telemetry": [
-            {
-                "truck": state["truck_id"],
-                "temperature": state["temperature"],
-                "timestamp": state["timestamp"],
-            }
-            for state in states
-        ],
+        "kafka_status": snapshot.get("kafka_status", "Online"),
+        "telemetry": snapshot.get("telemetry", []),
+        "alerts": snapshot.get("alerts", []),
     }
 
 
-# ---------------------------------------------------------
-# Metrics API
-# ---------------------------------------------------------
-
 @app.get("/api/metrics")
-def metrics() -> dict[str, int | float]:
-    """Return persistent StreamForge processing metrics."""
+def metrics() -> dict:
+    """Return the latest persistent dashboard metrics."""
 
-    store = RocksDBStore(STATE_PATH)
+    snapshot = load_snapshot()
 
-    try:
-        return load_metrics(store)
+    return snapshot.get(
+        "metrics",
+        {
+            "events_received": 0,
+            "events_processed": 0,
+            "events_invalid": 0,
+            "events_late": 0,
+            "active_trucks": 0,
+        },
+    )
 
-    finally:
-        store.close()
-
-
-# ---------------------------------------------------------
-# Root endpoint
-# ---------------------------------------------------------
 
 @app.get("/")
 def root() -> dict[str, str]:

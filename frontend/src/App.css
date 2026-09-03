@@ -1,18 +1,28 @@
 /* ================================
-   StreamForge Dashboard
+   StreamForge App
+================================ */
+
+.app {
+  min-height: 100vh;
+  background: #070c14;
+  color: #f1f5f9;
+}
+
+/* ================================
+   Legacy Dashboard Classes
 ================================ */
 
 .dashboard {
   padding: 32px;
-  background: #f5f7fa;
+  background: #070c14;
   min-height: calc(100vh - 93px);
 }
 
 /* Welcome */
 
 .welcome-card {
-  background: #ffffff;
-  border: 1px solid #e1e5ea;
+  background: #0d151f;
+  border: 1px solid #202c3d;
   border-radius: 14px;
   padding: 28px;
   margin-bottom: 24px;
@@ -21,11 +31,12 @@
 .welcome-card h2 {
   margin: 0 0 8px;
   font-size: 25px;
+  color: #f1f5f9;
 }
 
 .welcome-card p {
   margin: 0;
-  color: #64748b;
+  color: #8795aa;
   font-size: 16px;
 }
 
@@ -39,8 +50,8 @@
 }
 
 .stat-card {
-  background: #ffffff;
-  border: 1px solid #e1e5ea;
+  background: #0d151f;
+  border: 1px solid #202c3d;
   border-radius: 14px;
   padding: 22px;
   display: flex;
@@ -49,27 +60,29 @@
 }
 
 .stat-label {
-  color: #64748b;
+  color: #e5edf7;
   font-size: 14px;
+  font-weight: 500;
 }
 
 .stat-card strong {
   font-size: 28px;
+  color: #f1f5f9;
 }
 
 .stat-card small {
-  color: #94a3b8;
+  color: #718096;
 }
 
 .status-online {
-  color: #16a34a;
+  color: #4ade80;
 }
 
 /* Dashboard cards */
 
 .dashboard-card {
-  background: #ffffff;
-  border: 1px solid #e1e5ea;
+  background: #0d151f;
+  border: 1px solid #202c3d;
   border-radius: 14px;
   padding: 24px;
   margin-bottom: 24px;
@@ -82,11 +95,12 @@
 .card-header h3 {
   margin: 0 0 5px;
   font-size: 19px;
+  color: #f1f5f9;
 }
 
 .card-header p {
   margin: 0;
-  color: #64748b;
+  color: #8795aa;
   font-size: 14px;
 }
 
@@ -116,18 +130,21 @@
 .telemetry-table td {
   text-align: left;
   padding: 15px 12px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid #202c3d;
 }
 
 .telemetry-table th {
-  color: #64748b;
+  color: #8795aa;
   font-size: 13px;
   font-weight: 600;
 }
 
 .telemetry-table td {
+  color: #d8e0e9;
   font-size: 14px;
 }
+
+/* Status */
 
 .status-badge {
   display: inline-block;
@@ -138,16 +155,18 @@
 }
 
 .status-badge.normal {
-  background: #dcfce7;
-  color: #166534;
+  background: rgba(34, 197, 94, 0.1);
+  color: #4ade80;
 }
 
 .status-badge.warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
 }
 
-/* Responsive */
+/* ================================
+   Responsive
+================================ */
 
 @media (max-width: 1000px) {
   .stats-grid {

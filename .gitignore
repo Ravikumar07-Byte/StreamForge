@@ -11,3 +11,4 @@ state/rocksdb/
 data/generated/
 # RocksDB runtime state
 data/state/
+data/

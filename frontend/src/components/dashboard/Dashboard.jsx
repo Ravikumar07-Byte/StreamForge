@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import {
   Activity,
   AlertTriangle,
@@ -6,7 +7,6 @@ import {
   CheckCircle2,
   Clock3,
   RefreshCw,
-  Server,
   Thermometer,
   Wifi,
   WifiOff,
@@ -24,6 +24,8 @@ import {
 
 import api from "../../services/api";
 
+import "./Dashboard.css";
+
 const REFRESH_INTERVAL = 5000;
 const WARNING_TEMPERATURE = 35;
 
@@ -37,6 +39,7 @@ const EMPTY_METRICS = {
 
 function Dashboard() {
   const [telemetry, setTelemetry] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [metrics, setMetrics] = useState(EMPTY_METRICS);
 
   const [kafkaStatus, setKafkaStatus] = useState("Checking");
@@ -46,7 +49,7 @@ function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
 
   // ---------------------------------------------------------
-  // Fetch dashboard data
+  // FETCH BACKEND DATA
   // ---------------------------------------------------------
 
   const fetchDashboardData = useCallback(async (manual = false) => {
@@ -67,6 +70,12 @@ function Dashboard() {
       setTelemetry(
         Array.isArray(telemetryData.telemetry)
           ? telemetryData.telemetry
+          : []
+      );
+
+      setAlerts(
+        Array.isArray(telemetryData.alerts)
+          ? telemetryData.alerts
           : []
       );
 
@@ -100,7 +109,7 @@ function Dashboard() {
       setKafkaStatus("Offline");
 
       setError(
-        "Unable to connect to the StreamForge backend. Make sure the FastAPI server is running."
+        "Unable to connect to the StreamForge backend."
       );
     } finally {
       setLoading(false);
@@ -109,7 +118,7 @@ function Dashboard() {
   }, []);
 
   // ---------------------------------------------------------
-  // Automatic refresh
+  // AUTO REFRESH
   // ---------------------------------------------------------
 
   useEffect(() => {
@@ -119,41 +128,26 @@ function Dashboard() {
       fetchDashboardData();
     }, REFRESH_INTERVAL);
 
-    return () => {
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [fetchDashboardData]);
 
   // ---------------------------------------------------------
-  // Calculated dashboard values
+  // CALCULATIONS
   // ---------------------------------------------------------
 
-  const warningCount = useMemo(() => {
-    return telemetry.filter((event) => {
-      return (
-        Number(event.temperature) >=
-        WARNING_TEMPERATURE
-      );
-    }).length;
-  }, [telemetry]);
-
   const averageTemperature = useMemo(() => {
-    const validTemperatures = telemetry
+    const values = telemetry
       .map((event) => Number(event.temperature))
       .filter((value) => Number.isFinite(value));
 
-    if (validTemperatures.length === 0) {
+    if (!values.length) {
       return "--";
     }
 
-    const total = validTemperatures.reduce(
-      (sum, value) => sum + value,
-      0
-    );
-
-    return `${(
-      total / validTemperatures.length
-    ).toFixed(1)} °C`;
+    return (
+      values.reduce((sum, value) => sum + value, 0) /
+      values.length
+    ).toFixed(1);
   }, [telemetry]);
 
   const chartData = useMemo(() => {
@@ -162,11 +156,10 @@ function Dashboard() {
 
       return {
         time: Number.isNaN(date.getTime())
-          ? event.timestamp || "--"
+          ? "--"
           : date.toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
-              second: "2-digit",
             }),
         temperature: Number(event.temperature),
         truck: event.truck || "--",
@@ -175,19 +168,14 @@ function Dashboard() {
   }, [telemetry]);
 
   const recentTelemetry = useMemo(() => {
-    return [...telemetry]
-      .reverse()
-      .slice(0, 10);
+    return [...telemetry].reverse().slice(0, 8);
   }, [telemetry]);
 
-  // ---------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------
+  const isOnline =
+    kafkaStatus.toLowerCase() === "online";
 
   const formatTimestamp = (timestamp) => {
-    if (!timestamp) {
-      return "--";
-    }
+    if (!timestamp) return "--";
 
     const date = new Date(timestamp);
 
@@ -195,39 +183,28 @@ function Dashboard() {
       return timestamp;
     }
 
-    return date.toLocaleString();
+    return date.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
   };
 
-  const getTemperatureStatus = (temperature) => {
-    const value = Number(temperature);
-
-    if (value >= WARNING_TEMPERATURE) {
-      return {
-        label: "Warning",
-        className: "status-badge warning",
-      };
-    }
-
-    return {
-      label: "Normal",
-      className: "status-badge normal",
-    };
+  const getTemperatureClass = (temperature) => {
+    return Number(temperature) >= WARNING_TEMPERATURE
+      ? "temperature-warning"
+      : "temperature-normal";
   };
-
-  const isOnline =
-    kafkaStatus.toLowerCase() === "online";
 
   // ---------------------------------------------------------
-  // Loading state
+  // LOADING
   // ---------------------------------------------------------
 
   if (loading) {
     return (
-      <main className="dashboard">
-        <section className="dashboard-loading">
-          <div className="loading-spinner">
-            <RefreshCw size={28} />
-          </div>
+      <main className="dashboard-page">
+        <div className="dashboard-loading">
+          <RefreshCw className="spin" size={30} />
 
           <h2>Loading StreamForge</h2>
 
@@ -235,49 +212,45 @@ function Dashboard() {
             Connecting to the telemetry processing
             service...
           </p>
-        </section>
+        </div>
       </main>
     );
   }
 
   // ---------------------------------------------------------
-  // Dashboard
+  // DASHBOARD
   // ---------------------------------------------------------
 
   return (
-    <main className="dashboard">
+    <main className="dashboard-page">
 
-      {/* =====================================================
-          HEADER
-      ===================================================== */}
+      {/* HEADER */}
 
-      <section className="dashboard-header">
-
+      <section className="dashboard-topbar">
         <div>
-          <div className="eyebrow">
-            <Activity size={16} />
-            REAL-TIME MONITORING
+          <div className="dashboard-eyebrow">
+            <Activity size={15} />
+            REAL-TIME EVENT PROCESSOR
           </div>
 
-          <h1>Fleet Telemetry</h1>
+          <h1>Overview</h1>
 
           <p>
-            Monitor truck temperature and streaming
-            activity in real time.
+            Monitor your streaming platform in real-time
           </p>
         </div>
 
-        <div className="header-actions">
+        <div className="topbar-actions">
 
           <div
-            className={`connection-status ${
+            className={`connection-pill ${
               isOnline ? "online" : "offline"
             }`}
           >
             {isOnline ? (
-              <Wifi size={16} />
+              <Wifi size={15} />
             ) : (
-              <WifiOff size={16} />
+              <WifiOff size={15} />
             )}
 
             <span>
@@ -285,19 +258,22 @@ function Dashboard() {
             </span>
           </div>
 
+          <div className="last-refresh">
+            <Clock3 size={15} />
+
+            {lastUpdated
+              ? lastUpdated.toLocaleTimeString()
+              : "--"}
+          </div>
+
           <button
-            type="button"
-            className="refresh-button"
-            onClick={() =>
-              fetchDashboardData(true)
-            }
+            className="dashboard-refresh"
+            onClick={() => fetchDashboardData(true)}
             disabled={refreshing}
           >
             <RefreshCw
               size={16}
-              className={
-                refreshing ? "spin" : ""
-              }
+              className={refreshing ? "spin" : ""}
             />
 
             {refreshing
@@ -306,249 +282,289 @@ function Dashboard() {
           </button>
 
         </div>
-
       </section>
 
-      {/* =====================================================
-          ERROR
-      ===================================================== */}
+      {/* ERROR */}
 
       {error && (
-        <section className="dashboard-alert error">
-
-          <AlertTriangle size={20} />
-
-          <div>
-            <strong>
-              Backend connection problem
-            </strong>
-
-            <p>{error}</p>
-          </div>
-
-        </section>
+        <div className="dashboard-error">
+          <AlertTriangle size={18} />
+          {error}
+        </div>
       )}
 
-      {/* =====================================================
-          KPI CARDS
-      ===================================================== */}
+      {/* KPI CARDS */}
 
-      <section className="stats-grid">
+      <section className="kpi-grid">
 
-        {/* Active Trucks */}
+        {/* EVENTS PROCESSED */}
 
-        <div className="stat-card">
+        <div className="kpi-card blue-card">
 
-          <div className="stat-card-top">
-
-            <div className="stat-icon blue">
-              <CarFront size={21} />
-            </div>
-
-            <span className="stat-trend">
-              LIVE
-            </span>
-
+          <div className="kpi-icon">
+            <Activity size={22} />
           </div>
 
-          <span className="stat-label">
-            Active Trucks
-          </span>
+          <div className="kpi-content">
 
-          <strong className="stat-value">
-            {metrics.active_trucks}
-          </strong>
+            <span>Events Processed</span>
 
-          <small>
-            Vehicles reporting telemetry
-          </small>
+            <strong>
+              {metrics.events_processed.toLocaleString()}
+            </strong>
+
+            <small>
+              Successfully processed
+            </small>
+
+          </div>
 
         </div>
 
-        {/* Events Processed */}
+        {/* ACTIVE TRUCKS */}
 
-        <div className="stat-card">
+        <div className="kpi-card green-card">
 
-          <div className="stat-card-top">
-
-            <div className="stat-icon green">
-              <Activity size={21} />
-            </div>
-
-            <span className="stat-trend positive">
-              STREAMING
-            </span>
-
+          <div className="kpi-icon">
+            <CarFront size={22} />
           </div>
 
-          <span className="stat-label">
-            Events Processed
-          </span>
+          <div className="kpi-content">
 
-          <strong className="stat-value">
-            {metrics.events_processed}
-          </strong>
+            <span>Active Trucks</span>
 
-          <small>
-            Successfully processed events
-          </small>
+            <strong>
+              {metrics.active_trucks}
+            </strong>
+
+            <small>
+              Vehicles reporting telemetry
+            </small>
+
+          </div>
 
         </div>
 
-        {/* Average Temperature */}
+        {/* AVERAGE TEMPERATURE */}
 
-        <div className="stat-card">
+        <div className="kpi-card orange-card">
 
-          <div className="stat-card-top">
-
-            <div className="stat-icon orange">
-              <Thermometer size={21} />
-            </div>
-
-            <span className="stat-trend">
-              AVERAGE
-            </span>
-
+          <div className="kpi-icon">
+            <Thermometer size={22} />
           </div>
 
-          <span className="stat-label">
-            Average Temperature
-          </span>
+          <div className="kpi-content">
 
-          <strong className="stat-value">
-            {averageTemperature}
-          </strong>
+            <span>Average Temperature</span>
 
-          <small>
-            Based on recent telemetry
-          </small>
+            <strong>
+              {averageTemperature}
+              <em>°C</em>
+            </strong>
+
+            <small>
+              Based on recent telemetry
+            </small>
+
+          </div>
 
         </div>
 
-        {/* Alerts */}
+        {/* ACTIVE ALERTS */}
 
-        <div className="stat-card">
+        <div className="kpi-card red-card">
 
-          <div className="stat-card-top">
-
-            <div className="stat-icon red">
-              <AlertTriangle size={21} />
-            </div>
-
-            <span className="stat-trend danger">
-              ATTENTION
-            </span>
-
+          <div className="kpi-icon">
+            <AlertTriangle size={22} />
           </div>
 
-          <span className="stat-label">
-            Temperature Alerts
-          </span>
+          <div className="kpi-content">
 
-          <strong className="stat-value">
-            {warningCount}
-          </strong>
+            <span>Active Alerts</span>
 
-          <small>
-            Readings above 35 °C
-          </small>
+            <strong>
+              {alerts.length}
+            </strong>
+
+            <small>
+              Temperature warnings
+            </small>
+
+          </div>
 
         </div>
 
       </section>
 
-      {/* =====================================================
-          SYSTEM OVERVIEW
-      ===================================================== */}
+      {/* MAIN GRID */}
 
-      <section className="overview-grid">
+      <section className="content-grid">
 
-        {/* Processing Statistics */}
+        {/* TEMPERATURE CHART */}
 
-        <div className="dashboard-card">
+        <div className="dashboard-panel chart-panel">
 
-          <div className="card-header">
+          <div className="panel-title">
 
             <div>
-              <h2>System Overview</h2>
+
+              <div className="title-row">
+
+                <h2>
+                  Temperature Monitoring
+                </h2>
+
+                <span className="live-badge">
+                  <span />
+                  LIVE
+                </span>
+
+              </div>
 
               <p>
-                Current StreamForge processing
-                statistics
+                Latest truck temperature telemetry
               </p>
+
             </div>
 
-            <Server size={21} />
+            <span className="panel-meta">
+              Last 20 events
+            </span>
 
           </div>
 
-          <div className="system-stats">
+          <div className="chart-area">
 
-            <div className="system-stat">
-              <span>Events Received</span>
+            {chartData.length === 0 ? (
 
-              <strong>
-                {metrics.events_received}
-              </strong>
-            </div>
+              <div className="empty-state">
 
-            <div className="system-stat">
-              <span>Events Processed</span>
+                <Thermometer size={34} />
 
-              <strong>
-                {metrics.events_processed}
-              </strong>
-            </div>
+                <h3>
+                  No telemetry data
+                </h3>
 
-            <div className="system-stat">
-              <span>Invalid Events</span>
+                <p>
+                  Start the telemetry producer to
+                  see live data.
+                </p>
 
-              <strong>
-                {metrics.events_invalid}
-              </strong>
-            </div>
+              </div>
 
-            <div className="system-stat">
-              <span>Late Events</span>
+            ) : (
 
-              <strong>
-                {metrics.events_late}
-              </strong>
-            </div>
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 10,
+                    right: 20,
+                    left: 0,
+                    bottom: 5,
+                  }}
+                >
+
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    vertical={false}
+                    stroke="rgba(148,163,184,0.12)"
+                  />
+
+                  <XAxis
+                    dataKey="time"
+                    tick={{
+                      fill: "#7f8da3",
+                      fontSize: 11,
+                    }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+
+                  <YAxis
+                    tick={{
+                      fill: "#7f8da3",
+                      fontSize: 11,
+                    }}
+                    tickLine={false}
+                    axisLine={false}
+                    unit="°C"
+                  />
+
+                  <Tooltip
+                    contentStyle={{
+                      background: "#111827",
+                      border:
+                        "1px solid #263247",
+                      borderRadius: "8px",
+                      color: "#fff",
+                    }}
+                    formatter={(value) => [
+                      `${value} °C`,
+                      "Temperature",
+                    ]}
+                  />
+
+                  <Line
+                    type="monotone"
+                    dataKey="temperature"
+                    stroke="#3b82f6"
+                    strokeWidth={3}
+                    dot={{
+                      r: 3,
+                      fill: "#3b82f6",
+                    }}
+                    activeDot={{
+                      r: 6,
+                    }}
+                  />
+
+                </LineChart>
+
+              </ResponsiveContainer>
+            )}
 
           </div>
 
         </div>
 
-        {/* Pipeline Health */}
+        {/* SYSTEM HEALTH */}
 
-        <div className="dashboard-card health-card">
+        <div className="dashboard-panel health-panel">
 
-          <div className="card-header">
+          <div className="panel-title">
 
             <div>
-              <h2>Pipeline Health</h2>
+
+              <h2>
+                Pipeline Health
+              </h2>
 
               <p>
-                Kafka → Processing → Dashboard
+                Current service status
               </p>
+
             </div>
 
             {isOnline ? (
               <CheckCircle2
-                className="health-icon"
-                size={24}
+                className="healthy-icon"
+                size={22}
               />
             ) : (
               <WifiOff
-                className="health-icon"
-                size={24}
+                className="offline-icon"
+                size={22}
               />
             )}
 
           </div>
 
-          <div className="health-content">
+          <div className="health-main">
 
             <div
               className={`health-status ${
@@ -557,18 +573,31 @@ function Dashboard() {
                   : "unhealthy"
               }`}
             >
-              <span className="health-dot" />
+              <span />
 
               {isOnline
                 ? "All systems operational"
-                : "Backend connection unavailable"}
+                : "System unavailable"}
             </div>
 
             <div className="health-row">
-              <span>Kafka Connection</span>
+              <span>Kafka</span>
+              <strong>{kafkaStatus}</strong>
+            </div>
 
-              <strong>
-                {kafkaStatus}
+            <div className="health-row">
+              <span>FastAPI</span>
+
+              <strong className="green-text">
+                Online
+              </strong>
+            </div>
+
+            <div className="health-row">
+              <span>Consumer</span>
+
+              <strong className="green-text">
+                Running
               </strong>
             </div>
 
@@ -581,12 +610,10 @@ function Dashboard() {
             </div>
 
             <div className="health-row">
-              <span>Last Refresh</span>
+              <span>Invalid Events</span>
 
               <strong>
-                {lastUpdated
-                  ? lastUpdated.toLocaleTimeString()
-                  : "--"}
+                {metrics.events_invalid}
               </strong>
             </div>
 
@@ -596,140 +623,11 @@ function Dashboard() {
 
       </section>
 
-      {/* =====================================================
-          TEMPERATURE CHART
-      ===================================================== */}
+      {/* RECENT EVENTS */}
 
-      <section className="dashboard-card chart-card">
+      <section className="dashboard-panel">
 
-        <div className="card-header">
-
-          <div>
-
-            <div className="title-with-status">
-
-              <h2>
-                Temperature Monitoring
-              </h2>
-
-              <span className="live-badge">
-                <span className="live-dot" />
-                LIVE
-              </span>
-
-            </div>
-
-            <p>
-              Recent truck temperature
-              telemetry
-            </p>
-
-          </div>
-
-          <div className="chart-info">
-            <Clock3 size={16} />
-            Last 20 events
-          </div>
-
-        </div>
-
-        <div className="chart-container">
-
-          {chartData.length === 0 ? (
-
-            <div className="empty-state">
-
-              <Thermometer size={34} />
-
-              <h3>
-                No telemetry data
-              </h3>
-
-              <p>
-                Publish a telemetry event to
-                Kafka to see the live chart.
-              </p>
-
-            </div>
-
-          ) : (
-
-            <ResponsiveContainer
-              width="100%"
-              height="100%"
-            >
-
-              <LineChart
-                data={chartData}
-                margin={{
-                  top: 10,
-                  right: 20,
-                  left: 0,
-                  bottom: 5,
-                }}
-              >
-
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  vertical={false}
-                />
-
-                <XAxis
-                  dataKey="time"
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={false}
-                />
-
-                <YAxis
-                  tick={{ fontSize: 12 }}
-                  tickLine={false}
-                  axisLine={false}
-                  domain={["auto", "auto"]}
-                  unit="°C"
-                />
-
-                <Tooltip
-                  formatter={(value) => [
-                    `${value} °C`,
-                    "Temperature",
-                  ]}
-                  labelFormatter={(label) =>
-                    `Time: ${label}`
-                  }
-                />
-
-                <Line
-                  type="monotone"
-                  dataKey="temperature"
-                  stroke="#2563eb"
-                  strokeWidth={3}
-                  dot={{
-                    r: 4,
-                  }}
-                  activeDot={{
-                    r: 7,
-                  }}
-                  animationDuration={500}
-                />
-
-              </LineChart>
-
-            </ResponsiveContainer>
-
-          )}
-
-        </div>
-
-      </section>
-
-      {/* =====================================================
-          RECENT TELEMETRY
-      ===================================================== */}
-
-      <section className="dashboard-card">
-
-        <div className="card-header">
+        <div className="panel-title">
 
           <div>
 
@@ -738,8 +636,7 @@ function Dashboard() {
             </h2>
 
             <p>
-              Latest events received from the
-              truck fleet
+              Latest events received from the truck fleet
             </p>
 
           </div>
@@ -754,24 +651,23 @@ function Dashboard() {
 
           {recentTelemetry.length === 0 ? (
 
-            <div className="empty-state table-empty">
+            <div className="empty-state">
 
-              <Activity size={32} />
+              <Activity size={30} />
 
               <h3>
                 No telemetry events
               </h3>
 
               <p>
-                Waiting for truck telemetry
-                from Kafka.
+                Waiting for truck telemetry from Kafka.
               </p>
 
             </div>
 
           ) : (
 
-            <table className="telemetry-table">
+            <table className="modern-table">
 
               <thead>
 
@@ -789,10 +685,9 @@ function Dashboard() {
                 {recentTelemetry.map(
                   (event, index) => {
 
-                    const status =
-                      getTemperatureStatus(
-                        event.temperature
-                      );
+                    const warning =
+                      Number(event.temperature) >=
+                      WARNING_TEMPERATURE;
 
                     return (
                       <tr
@@ -801,17 +696,14 @@ function Dashboard() {
 
                         <td>
 
-                          <div className="truck-cell">
+                          <div className="truck-info">
 
-                            <div className="truck-avatar">
-                              <CarFront
-                                size={16}
-                              />
+                            <div className="truck-icon">
+                              <CarFront size={16} />
                             </div>
 
                             <strong>
-                              {event.truck ||
-                                "--"}
+                              {event.truck}
                             </strong>
 
                           </div>
@@ -820,35 +712,45 @@ function Dashboard() {
 
                         <td>
 
-                          <span className="temperature-value">
+                          <strong
+                            className={
+                              getTemperatureClass(
+                                event.temperature
+                              )
+                            }
+                          >
                             {Number(
                               event.temperature
-                            ).toFixed(1)}{" "}
+                            ).toFixed(1)}
                             °C
-                          </span>
+                          </strong>
 
                         </td>
 
-                        <td>
+                        <td className="timestamp">
 
-                          <span className="timestamp">
-                            {formatTimestamp(
-                              event.timestamp
-                            )}
-                          </span>
+                          {formatTimestamp(
+                            event.timestamp
+                          )}
 
                         </td>
 
                         <td>
 
                           <span
-                            className={
-                              status.className
-                            }
+                            className={`status-badge ${
+                              warning
+                                ? "warning"
+                                : "normal"
+                            }`}
                           >
-                            <span className="status-dot" />
 
-                            {status.label}
+                            <span />
+
+                            {warning
+                              ? "Warning"
+                              : "Normal"}
+
                           </span>
 
                         </td>
@@ -867,6 +769,143 @@ function Dashboard() {
         </div>
 
       </section>
+
+      {/* ACTIVE ALERTS */}
+
+      <section className="dashboard-panel alerts-panel">
+
+        <div className="panel-title">
+
+          <div>
+
+            <div className="title-row">
+
+              <h2>
+                Active Temperature Alerts
+              </h2>
+
+              {alerts.length > 0 && (
+                <span className="alert-count">
+                  {alerts.length}
+                </span>
+              )}
+
+            </div>
+
+            <p>
+              Trucks currently above the 35°C threshold
+            </p>
+
+          </div>
+
+          <AlertTriangle
+            className={
+              alerts.length
+                ? "alert-icon-active"
+                : "alert-icon"
+            }
+            size={22}
+          />
+
+        </div>
+
+        {alerts.length === 0 ? (
+
+          <div className="no-alerts">
+
+            <CheckCircle2 size={30} />
+
+            <div>
+
+              <strong>
+                No active temperature alerts
+              </strong>
+
+              <span>
+                All trucks are currently within the
+                temperature threshold.
+              </span>
+
+            </div>
+
+          </div>
+
+        ) : (
+
+          <div className="alerts-list">
+
+            {alerts.map((alert) => (
+
+              <div
+                className="alert-row"
+                key={alert.truck_id}
+              >
+
+                <div className="alert-truck">
+
+                  <div className="alert-truck-icon">
+                    <Thermometer size={18} />
+                  </div>
+
+                  <div>
+
+                    <strong>
+                      {alert.truck_id}
+                    </strong>
+
+                    <span>
+                      {alert.message}
+                    </span>
+
+                  </div>
+
+                </div>
+
+                <div className="alert-temperature">
+
+                  <strong>
+                    {Number(
+                      alert.temperature
+                    ).toFixed(1)}
+                    °C
+                  </strong>
+
+                  <span>
+                    Threshold{" "}
+                    {Number(
+                      alert.threshold
+                    ).toFixed(1)}
+                    °C
+                  </span>
+
+                </div>
+
+                <span className="severity-badge">
+                  {alert.severity || "warning"}
+                </span>
+
+                <span className="alert-time">
+
+                  {formatTimestamp(
+                    alert.updated_at ||
+                    alert.timestamp
+                  )}
+
+                </span>
+
+              </div>
+
+            ))}
+
+          </div>
+
+        )}
+
+      </section>
+
+      <footer className="dashboard-footer">
+        © 2026 StreamForge. Real-time Truck Telemetry Platform.
+      </footer>
 
     </main>
   );
