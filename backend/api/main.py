@@ -6,11 +6,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.api.routes.health import router as health_router
 from backend.state.snapshot import load_snapshot
 
+
 app = FastAPI(
     title="StreamForge API",
     version="1.0.0",
     description="Real-time truck telemetry streaming API",
 )
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -23,19 +25,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(health_router, prefix="/api")
+
+app.include_router(
+    health_router,
+    prefix="/api",
+)
 
 
 @app.get("/api/telemetry")
 def telemetry() -> dict:
-    """Return the latest dashboard telemetry and active alerts."""
+    """Return the latest dashboard telemetry snapshot."""
 
     snapshot = load_snapshot()
 
     return {
-        "kafka_status": snapshot.get("kafka_status", "Online"),
-        "telemetry": snapshot.get("telemetry", []),
-        "alerts": snapshot.get("alerts", []),
+        "kafka_status": snapshot.get(
+            "kafka_status",
+            "Online",
+        ),
+        "telemetry": snapshot.get(
+            "telemetry",
+            [],
+        ),
+        "alerts": snapshot.get(
+            "alerts",
+            [],
+        ),
     }
 
 
