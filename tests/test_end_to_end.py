@@ -21,7 +21,6 @@ def test_telemetry_producer_consumer_flow():
     producer = TelemetryProducer()
 
     try:
-        # Allow Kafka enough time to establish the consumer assignment.
         assignment_timeout = 15.0
         start_time = time.monotonic()
 
@@ -49,14 +48,22 @@ def test_telemetry_producer_consumer_flow():
         start_time = time.monotonic()
 
         while time.monotonic() - start_time < receive_timeout:
-            message = consumer.consume_one(timeout=1.0)
+            message = consumer.consumer.poll(1.0)
 
             if message is None:
                 continue
 
-            if message.truck_id == telemetry.truck_id:
-                received = message
+            if message.error():
+                continue
+
+            payload = message.value().decode("utf-8")
+
+            received = Telemetry.model_validate_json(payload)
+
+            if received.truck_id == telemetry.truck_id:
                 break
+
+            received = None
 
         assert received is not None, (
             "Telemetry message was not received from Kafka "
