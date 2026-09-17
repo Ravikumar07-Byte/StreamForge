@@ -19,59 +19,13 @@ function App() {
       />
 
       <div className="main-content">
-        {activePage === "dashboard" && (
-          <Dashboard />
-        )}
+        {activePage === "dashboard" && <Dashboard />}
 
-        {activePage === "trucks" && (
-          <Trucks />
-        )}
+        {activePage === "trucks" && <Trucks />}
 
-        {activePage === "analytics" && (
-          <Analytics />
-        )}
+        {activePage === "analytics" && <Analytics />}
 
-        {activePage === "topology" && (
-          <Topology />
-        )}
-
-        {activePage === "settings" && (
-          <main className="dashboard-page">
-            <section className="dashboard-topbar">
-              <div>
-                <div className="dashboard-eyebrow">
-                  SETTINGS
-                </div>
-
-                <h1>Settings</h1>
-
-                <p>
-                  Configure your StreamForge platform
-                </p>
-              </div>
-            </section>
-
-            <section className="dashboard-panel">
-              <div className="panel-title">
-                <div>
-                  <h2>System Settings</h2>
-
-                  <p>
-                    StreamForge configuration options
-                  </p>
-                </div>
-              </div>
-
-              <div className="empty-state">
-                <h3>Settings Ready</h3>
-
-                <p>
-                  Configuration options will be available here.
-                </p>
-              </div>
-            </section>
-          </main>
-        )}
+        {activePage === "topology" && <Topology />}
       </div>
     </div>
   );

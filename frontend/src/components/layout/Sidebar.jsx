@@ -3,7 +3,6 @@ import {
   Truck,
   BarChart3,
   GitBranch,
-  Settings,
 } from "lucide-react";
 
 function Sidebar({ activePage, setActivePage }) {
@@ -53,16 +52,6 @@ function Sidebar({ activePage, setActivePage }) {
         >
           <GitBranch size={20} />
           <span>Topology</span>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activePage === "settings" ? "active" : ""
-          }`}
-          onClick={() => setActivePage("settings")}
-        >
-          <Settings size={20} />
-          <span>Settings</span>
         </button>
       </nav>
     </aside>
