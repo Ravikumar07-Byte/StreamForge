@@ -44,7 +44,7 @@ jobs:
               exit 0
             fi
 
-            echo "Waiting for Kafka... attempt /30"
+            echo "Waiting for Kafka... attempt $i/30"
             sleep 2
           done
 
@@ -53,7 +53,7 @@ jobs:
           docker logs streamforge-kafka
           exit 1
 
-      - name: Create Kafka topic
+      - name: Create Kafka topics
         run: |
           docker exec streamforge-kafka \
             /opt/kafka/bin/kafka-topics.sh \
@@ -64,13 +64,31 @@ jobs:
             --replication-factor 1 \
             --bootstrap-server localhost:9092
 
+          docker exec streamforge-kafka \
+            /opt/kafka/bin/kafka-topics.sh \
+            --create \
+            --if-not-exists \
+            --topic streamforge-state-changelog \
+            --partitions 1 \
+            --replication-factor 1 \
+            --bootstrap-server localhost:9092
+
       - name: Verify Kafka
         run: |
           docker compose ps
+
+          echo "Verifying truck-telemetry..."
           docker exec streamforge-kafka \
             /opt/kafka/bin/kafka-topics.sh \
             --describe \
             --topic truck-telemetry \
+            --bootstrap-server localhost:9092
+
+          echo "Verifying streamforge-state-changelog..."
+          docker exec streamforge-kafka \
+            /opt/kafka/bin/kafka-topics.sh \
+            --describe \
+            --topic streamforge-state-changelog \
             --bootstrap-server localhost:9092
 
       - name: Run tests
