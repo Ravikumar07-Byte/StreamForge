@@ -1,7 +1,7 @@
 import json
 import uuid
 
-from confluent_kafka import Consumer
+from confluent_kafka import Consumer, TopicPartition
 
 from backend.kafka.config import KAFKA_BOOTSTRAP_SERVERS
 from backend.kafka.topics import STATE_CHANGELOG_TOPIC
@@ -33,7 +33,7 @@ def test_persistent_state_manager():
 
     try:
         # ---------------------------------------------------------
-        # 1. Persist state and publish changelog.
+        # 1. Persist state locally and publish Kafka changelog.
         # ---------------------------------------------------------
         manager.put(
             key=key,
@@ -52,11 +52,7 @@ def test_persistent_state_manager():
         assert stored_state == state
 
         # ---------------------------------------------------------
-        # 3. Create a new consumer.
-        #
-        # Since this is a unique consumer group and
-        # auto.offset.reset is "earliest", Kafka will read
-        # existing records from the beginning of the topic.
+        # 3. Create a completely new Kafka consumer group.
         # ---------------------------------------------------------
         group_id = (
             f"streamforge-manager-test-"
@@ -77,12 +73,12 @@ def test_persistent_state_manager():
         )
 
         # ---------------------------------------------------------
-        # 4. Wait for partition assignment.
+        # 4. Wait until Kafka assigns a partition.
         # ---------------------------------------------------------
         assignment = []
 
-        for _ in range(20):
-            consumer.poll(0.5)
+        for _ in range(30):
+            consumer.poll(0.2)
 
             assignment = consumer.assignment()
 
@@ -95,11 +91,36 @@ def test_persistent_state_manager():
         )
 
         # ---------------------------------------------------------
-        # 5. Read records until our unique key appears.
+        # 5. Explicitly position every assigned partition at
+        #    its earliest available offset.
+        #
+        #    Do NOT rely only on auto.offset.reset here.
+        # ---------------------------------------------------------
+        for partition in assignment:
+            low_offset, high_offset = (
+                consumer.get_watermark_offsets(
+                    partition,
+                    timeout=5.0,
+                )
+            )
+
+            assert low_offset >= 0
+            assert high_offset >= low_offset
+
+            consumer.seek(
+                TopicPartition(
+                    partition.topic,
+                    partition.partition,
+                    low_offset,
+                )
+            )
+
+        # ---------------------------------------------------------
+        # 6. Read records until our unique test key appears.
         # ---------------------------------------------------------
         message = None
 
-        for _ in range(40):
+        for _ in range(60):
             candidate = consumer.poll(0.5)
 
             if candidate is None:
@@ -111,13 +132,13 @@ def test_persistent_state_manager():
             if candidate.topic() != STATE_CHANGELOG_TOPIC:
                 continue
 
-            # Kafka returns keys as bytes.
             candidate_key = candidate.key()
 
             if candidate_key is None:
                 continue
 
-            candidate_key = candidate_key.decode("utf-8")
+            if isinstance(candidate_key, bytes):
+                candidate_key = candidate_key.decode("utf-8")
 
             if candidate_key != key:
                 continue
@@ -131,14 +152,19 @@ def test_persistent_state_manager():
         )
 
         # ---------------------------------------------------------
-        # 6. Verify Kafka record.
+        # 7. Verify Kafka record.
         # ---------------------------------------------------------
         assert (
             message.topic()
             == STATE_CHANGELOG_TOPIC
         )
 
-        assert message.key().decode("utf-8") == key
+        message_key = message.key()
+
+        if isinstance(message_key, bytes):
+            message_key = message_key.decode("utf-8")
+
+        assert message_key == key
 
         payload = json.loads(
             message.value().decode("utf-8")
