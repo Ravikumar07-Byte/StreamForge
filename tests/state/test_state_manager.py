@@ -14,10 +14,6 @@ def test_persistent_state_manager():
         f"{uuid.uuid4().hex[:8]}"
     )
 
-    manager = PersistentStateManager(
-        db_path=db_path,
-    )
-
     key = (
         f"truck:TEST-{uuid.uuid4().hex[:8]}"
     )
@@ -29,30 +25,15 @@ def test_persistent_state_manager():
         "status": "active",
     }
 
+    manager = PersistentStateManager(
+        db_path=db_path,
+    )
+
     consumer = None
 
     try:
         # ---------------------------------------------------------
-        # 1. Persist state locally and publish Kafka changelog.
-        # ---------------------------------------------------------
-        manager.put(
-            key=key,
-            value=state,
-        )
-
-        manager.flush()
-
-        # ---------------------------------------------------------
-        # 2. Verify local RocksDB state.
-        # ---------------------------------------------------------
-        assert manager.exists(key)
-
-        stored_state = manager.get(key)
-
-        assert stored_state == state
-
-        # ---------------------------------------------------------
-        # 3. Create a completely new Kafka consumer group.
+        # 1. Create a dedicated Kafka consumer.
         # ---------------------------------------------------------
         group_id = (
             f"streamforge-manager-test-"
@@ -68,35 +49,40 @@ def test_persistent_state_manager():
             }
         )
 
-        consumer.subscribe(
-            [STATE_CHANGELOG_TOPIC]
+        # ---------------------------------------------------------
+        # 2. Discover all partitions.
+        # ---------------------------------------------------------
+        metadata = consumer.list_topics(
+            topic=STATE_CHANGELOG_TOPIC,
+            timeout=5.0,
+        )
+
+        topic_metadata = metadata.topics[
+            STATE_CHANGELOG_TOPIC
+        ]
+
+        partitions = sorted(
+            topic_metadata.partitions.keys()
+        )
+
+        assert partitions, (
+            "State changelog topic has no partitions"
         )
 
         # ---------------------------------------------------------
-        # 4. Wait until Kafka assigns a partition.
-        # ---------------------------------------------------------
-        assignment = []
-
-        for _ in range(30):
-            consumer.poll(0.2)
-
-            assignment = consumer.assignment()
-
-            if assignment:
-                break
-
-        assert assignment, (
-            "Kafka state changelog consumer "
-            "was not assigned a partition"
-        )
-
-        # ---------------------------------------------------------
-        # 5. Explicitly position every assigned partition at
-        #    its earliest available offset.
+        # 3. Capture the current end offset of every partition.
         #
-        #    Do NOT rely only on auto.offset.reset here.
+        # The consumer will start AFTER the existing records.
+        # This prevents the test from scanning old changelog data.
         # ---------------------------------------------------------
-        for partition in assignment:
+        starting_positions = []
+
+        for partition_id in partitions:
+            partition = TopicPartition(
+                STATE_CHANGELOG_TOPIC,
+                partition_id,
+            )
+
             low_offset, high_offset = (
                 consumer.get_watermark_offsets(
                     partition,
@@ -107,21 +93,50 @@ def test_persistent_state_manager():
             assert low_offset >= 0
             assert high_offset >= low_offset
 
-            consumer.seek(
+            starting_positions.append(
                 TopicPartition(
-                    partition.topic,
-                    partition.partition,
-                    low_offset,
+                    STATE_CHANGELOG_TOPIC,
+                    partition_id,
+                    high_offset,
                 )
             )
 
         # ---------------------------------------------------------
-        # 6. Read records until our unique test key appears.
+        # 4. Explicitly assign partitions at their current end.
+        #
+        # This is deterministic and avoids subscribe/seek timing
+        # races.
+        # ---------------------------------------------------------
+        consumer.assign(starting_positions)
+
+        assert consumer.assignment()
+
+        # ---------------------------------------------------------
+        # 5. NOW publish the test state.
+        # ---------------------------------------------------------
+        manager.put(
+            key=key,
+            value=state,
+        )
+
+        manager.flush()
+
+        # ---------------------------------------------------------
+        # 6. Verify local RocksDB state.
+        # ---------------------------------------------------------
+        assert manager.exists(key)
+
+        stored_state = manager.get(key)
+
+        assert stored_state == state
+
+        # ---------------------------------------------------------
+        # 7. Read the newly produced Kafka record.
         # ---------------------------------------------------------
         message = None
 
-        for _ in range(60):
-            candidate = consumer.poll(0.5)
+        for _ in range(30):
+            candidate = consumer.poll(1.0)
 
             if candidate is None:
                 continue
@@ -138,7 +153,9 @@ def test_persistent_state_manager():
                 continue
 
             if isinstance(candidate_key, bytes):
-                candidate_key = candidate_key.decode("utf-8")
+                candidate_key = candidate_key.decode(
+                    "utf-8"
+                )
 
             if candidate_key != key:
                 continue
@@ -148,11 +165,11 @@ def test_persistent_state_manager():
 
         assert message is not None, (
             "State changelog record was not received "
-            "by the consumer"
+            "after deterministic assignment"
         )
 
         # ---------------------------------------------------------
-        # 7. Verify Kafka record.
+        # 8. Verify Kafka record.
         # ---------------------------------------------------------
         assert (
             message.topic()
@@ -162,7 +179,9 @@ def test_persistent_state_manager():
         message_key = message.key()
 
         if isinstance(message_key, bytes):
-            message_key = message_key.decode("utf-8")
+            message_key = message_key.decode(
+                "utf-8"
+            )
 
         assert message_key == key
 

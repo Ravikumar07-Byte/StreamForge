@@ -13,6 +13,7 @@ from backend.state.alerts_state import (
     get_active_alerts,
     update_temperature_alert,
 )
+from backend.state.changelog_recovery import restore_from_changelog
 from backend.state.late_events import save_late_event
 from backend.state.snapshot import save_snapshot
 from backend.state.metrics_state import (
@@ -52,6 +53,7 @@ def update_dashboard_snapshot(store: RocksDBStore) -> None:
             continue
 
         truck_id = key[len("truck:"):]
+
         if not truck_id:
             continue
 
@@ -80,6 +82,55 @@ def update_dashboard_snapshot(store: RocksDBStore) -> None:
     )
 
 
+def has_local_truck_state(store: RocksDBStore) -> bool:
+    """Return True when local truck state exists."""
+
+    for key in store.keys():
+        if key.startswith("truck:"):
+            return True
+
+    return False
+
+
+def restore_state_if_needed(store: RocksDBStore) -> bool:
+    """Restore local RocksDB state from Kafka when truck state is missing.
+
+    Recovery is required when a worker starts with an empty local
+    RocksDB database, for example after local state was lost.
+
+    Returns:
+        True when Kafka changelog recovery restored state.
+        False when existing local truck state was already available
+        or when the changelog contained no recoverable state.
+    """
+
+    if has_local_truck_state(store):
+        print(
+            "Existing truck state found. "
+            "Kafka changelog recovery not required."
+        )
+        return False
+
+    print(
+        "No local truck state found. "
+        "Starting Kafka changelog recovery..."
+    )
+
+    restored_count = restore_from_changelog(store)
+
+    print(
+        "Kafka changelog recovery completed: "
+        f"{restored_count} state records restored."
+    )
+
+    if restored_count > 0:
+        print("Local RocksDB state successfully restored.")
+        return True
+
+    print("No state was available in the Kafka changelog.")
+    return False
+
+
 def run() -> None:
     """Consume and process telemetry events continuously."""
 
@@ -90,10 +141,36 @@ def run() -> None:
 
     store = RocksDBStore(STATE_PATH)
 
+    # -------------------------------------------------------------
+    # Worker startup recovery
+    # -------------------------------------------------------------
+    #
+    # If local RocksDB still contains truck state, continue normally.
+    #
+    # If local state was lost, replay the Kafka state changelog
+    # before loading active trucks, metrics, watermark, and
+    # recovery information.
+    #
+    recovered_from_changelog = restore_state_if_needed(store)
+
+    if recovered_from_changelog:
+        print(
+            "Worker startup recovery completed from "
+            "Kafka state changelog."
+        )
+
+    # -------------------------------------------------------------
+    # Restore active truck state after changelog replay.
+    # -------------------------------------------------------------
+
     active_truck_ids = get_active_trucks(store)
 
     set_active_trucks(len(active_truck_ids))
-    set_metric(store, "active_trucks", len(active_truck_ids))
+    set_metric(
+        store,
+        "active_trucks",
+        len(active_truck_ids),
+    )
 
     update_dashboard_snapshot(store)
 
@@ -104,6 +181,10 @@ def run() -> None:
         )
     else:
         print("No currently active trucks found.")
+
+    # -------------------------------------------------------------
+    # Restore Kafka processing position information.
+    # -------------------------------------------------------------
 
     recovery_state = load_recovery_state(store)
 
@@ -116,6 +197,10 @@ def run() -> None:
         )
     else:
         print("No previous recovery state found.")
+
+    # -------------------------------------------------------------
+    # Restore event-time watermark.
+    # -------------------------------------------------------------
 
     watermark = load_watermark(store)
 
@@ -130,6 +215,10 @@ def run() -> None:
         while True:
             telemetry = consumer.consume_one(timeout=1.0)
 
+            # -----------------------------------------------------
+            # No telemetry available.
+            # -----------------------------------------------------
+
             if telemetry is None:
                 active_truck_ids = get_active_trucks(store)
 
@@ -141,16 +230,32 @@ def run() -> None:
                 )
 
                 update_dashboard_snapshot(store)
+
                 continue
 
+            # -----------------------------------------------------
+            # Event received.
+            # -----------------------------------------------------
+
             record_received()
-            increment_metric(store, "events_received")
+            increment_metric(
+                store,
+                "events_received",
+            )
 
             processed = process_telemetry(telemetry)
 
+            # -----------------------------------------------------
+            # Invalid event.
+            # -----------------------------------------------------
+
             if processed is None:
                 record_invalid()
-                increment_metric(store, "events_invalid")
+
+                increment_metric(
+                    store,
+                    "events_invalid",
+                )
 
                 update_dashboard_snapshot(store)
 
@@ -161,23 +266,30 @@ def run() -> None:
                 )
 
                 consumer.commit()
+
                 continue
 
-            # Establish an initial watermark from the first valid event.
+            # -----------------------------------------------------
+            # Establish initial watermark.
+            # -----------------------------------------------------
+
             if watermark is None:
                 watermark = update_watermark(
                     store,
                     processed.timestamp,
                 )
 
-            # Detect events that are older than the allowed lateness
-            # relative to the current event-time watermark.
+            # -----------------------------------------------------
+            # Detect late event.
+            # -----------------------------------------------------
+
             if is_late_event(
                 processed.timestamp,
                 watermark,
                 ALLOWED_LATENESS_SECONDS,
             ):
                 record_late()
+
                 increment_metric(
                     store,
                     "events_late",
@@ -197,15 +309,22 @@ def run() -> None:
                 )
 
                 consumer.commit()
+
                 continue
 
-            # Advance the event-time watermark for an on-time event.
+            # -----------------------------------------------------
+            # Advance event-time watermark.
+            # -----------------------------------------------------
+
             watermark = update_watermark(
                 store,
                 processed.timestamp,
             )
 
-            # Add the event to its persistent five-minute window.
+            # -----------------------------------------------------
+            # Persist five-minute window state.
+            # -----------------------------------------------------
+
             window_start = get_five_minute_window_start(
                 processed.timestamp,
             )
@@ -217,13 +336,33 @@ def run() -> None:
                 processed.temperature,
             )
 
-            # Record successfully processed event.
+            # -----------------------------------------------------
+            # Record successful processing.
+            # -----------------------------------------------------
+
             record_processed()
-            increment_metric(store, "events_processed")
 
-            save_truck_state(store, processed)
+            increment_metric(
+                store,
+                "events_processed",
+            )
 
-            # Create or clear a temperature alert.
+            # -----------------------------------------------------
+            # Persist truck state.
+            #
+            # PersistentStateManager / changelog integration
+            # ensures state changes can be recovered later.
+            # -----------------------------------------------------
+
+            save_truck_state(
+                store,
+                processed,
+            )
+
+            # -----------------------------------------------------
+            # Create or clear temperature alert.
+            # -----------------------------------------------------
+
             alert = update_temperature_alert(
                 store,
                 processed,
@@ -237,14 +376,23 @@ def run() -> None:
                     f"threshold={alert['threshold']}°C"
                 )
 
+            # -----------------------------------------------------
+            # Update active truck metrics.
+            # -----------------------------------------------------
+
             active_truck_ids = get_active_trucks(store)
 
             set_active_trucks(len(active_truck_ids))
+
             set_metric(
                 store,
                 "active_trucks",
                 len(active_truck_ids),
             )
+
+            # -----------------------------------------------------
+            # Save consumer recovery position.
+            # -----------------------------------------------------
 
             position = consumer.get_last_position()
 
@@ -257,9 +405,17 @@ def run() -> None:
                     offset=offset,
                 )
 
+            # -----------------------------------------------------
+            # Update API telemetry state.
+            # -----------------------------------------------------
+
             add_telemetry(processed)
 
             update_dashboard_snapshot(store)
+
+            # -----------------------------------------------------
+            # Commit Kafka message after state persistence.
+            # -----------------------------------------------------
 
             consumer.commit()
 
