@@ -1,11 +1,19 @@
 """StreamForge FastAPI application."""
 
 from fastapi import FastAPI
-from prometheus_client import make_asgi_app
 from fastapi.middleware.cors import CORSMiddleware
+from prometheus_client import (
+    CollectorRegistry,
+    make_asgi_app,
+    multiprocess,
+)
 
 from backend.api.routes.health import router as health_router
 from backend.state.snapshot import load_snapshot
+
+# Import StreamForge metrics so the metric definitions are
+# available in the application environment.
+from backend.metrics import prometheus
 
 
 app = FastAPI(
@@ -13,17 +21,37 @@ app = FastAPI(
     version="1.0.0",
     description="Real-time truck telemetry streaming API",
 )
+
+
 # ============================================================
-# PROMETHEUS METRICS
+# PROMETHEUS MULTIPROCESS METRICS
 # ============================================================
 
-prometheus_app = make_asgi_app()
+def create_prometheus_app():
+    """Create a Prometheus endpoint aggregating all worker processes."""
+
+    registry = CollectorRegistry()
+
+    multiprocess.MultiProcessCollector(
+        registry,
+    )
+
+    return make_asgi_app(
+        registry=registry,
+    )
+
+
+prometheus_app = create_prometheus_app()
 
 app.mount(
     "/metrics",
     prometheus_app,
 )
 
+
+# ============================================================
+# CORS
+# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,11 +65,19 @@ app.add_middleware(
 )
 
 
+# ============================================================
+# ROUTES
+# ============================================================
+
 app.include_router(
     health_router,
     prefix="/api",
 )
 
+
+# ============================================================
+# TELEMETRY API
+# ============================================================
 
 @app.get("/api/telemetry")
 def telemetry() -> dict:
@@ -65,6 +101,10 @@ def telemetry() -> dict:
     }
 
 
+# ============================================================
+# DASHBOARD METRICS API
+# ============================================================
+
 @app.get("/api/metrics")
 def metrics() -> dict:
     """Return the latest persistent dashboard metrics."""
@@ -82,6 +122,10 @@ def metrics() -> dict:
         },
     )
 
+
+# ============================================================
+# ROOT
+# ============================================================
 
 @app.get("/")
 def root() -> dict[str, str]:
