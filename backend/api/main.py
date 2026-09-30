@@ -1,6 +1,7 @@
 """StreamForge FastAPI application."""
 
 from fastapi import FastAPI
+from prometheus_client import make_asgi_app
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes.health import router as health_router
@@ -11,6 +12,16 @@ app = FastAPI(
     title="StreamForge API",
     version="1.0.0",
     description="Real-time truck telemetry streaming API",
+)
+# ============================================================
+# PROMETHEUS METRICS
+# ============================================================
+
+prometheus_app = make_asgi_app()
+
+app.mount(
+    "/metrics",
+    prometheus_app,
 )
 
 
