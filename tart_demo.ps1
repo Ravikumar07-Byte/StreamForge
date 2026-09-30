@@ -1,0 +1,104 @@
+[1mdiff --git a/frontend/package-lock.json b/frontend/package-lock.json[m
+[1mindex eb19b5f..e73dfe3 100644[m
+[1m--- a/frontend/package-lock.json[m
+[1m+++ b/frontend/package-lock.json[m
+[36m@@ -657,9 +657,6 @@[m
+         "arm64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "glibc"[m
+[31m-      ],[m
+       "license": "MIT",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -677,9 +674,6 @@[m
+         "arm64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "musl"[m
+[31m-      ],[m
+       "license": "MIT",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -697,9 +691,6 @@[m
+         "ppc64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "glibc"[m
+[31m-      ],[m
+       "license": "MIT",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -717,9 +708,6 @@[m
+         "s390x"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "glibc"[m
+[31m-      ],[m
+       "license": "MIT",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -737,9 +725,6 @@[m
+         "x64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "glibc"[m
+[31m-      ],[m
+       "license": "MIT",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -757,9 +742,6 @@[m
+         "x64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "musl"[m
+[31m-      ],[m
+       "license": "MIT",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -2407,9 +2389,6 @@[m
+         "arm64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "glibc"[m
+[31m-      ],[m
+       "license": "MPL-2.0",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -2431,9 +2410,6 @@[m
+         "arm64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "musl"[m
+[31m-      ],[m
+       "license": "MPL-2.0",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -2455,9 +2431,6 @@[m
+         "x64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "glibc"[m
+[31m-      ],[m
+       "license": "MPL-2.0",[m
+       "optional": true,[m
+       "os": [[m
+[36m@@ -2479,9 +2452,6 @@[m
+         "x64"[m
+       ],[m
+       "dev": true,[m
+[31m-      "libc": [[m
+[31m-        "musl"[m
+[31m-      ],[m
+       "license": "MPL-2.0",[m
+       "optional": true,[m
+       "os": [[m

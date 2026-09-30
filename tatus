@@ -1,0 +1,63 @@
+warning: in the working copy of '.github/workflows/ci.yml', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml[m
+[1mindex 9c37de4..5e50f78 100644[m
+[1m--- a/.github/workflows/ci.yml[m
+[1m+++ b/.github/workflows/ci.yml[m
+[36m@@ -1,4 +1,4 @@[m
+[31m-name: StreamForge CI[m
+[32m+[m[32m﻿name: StreamForge CI[m
+ [m
+ on:[m
+   push:[m
+[36m@@ -44,7 +44,7 @@[m [mjobs:[m
+               exit 0[m
+             fi[m
+ [m
+[31m-            echo "Waiting for Kafka... attempt /30"[m
+[32m+[m[32m            echo "Waiting for Kafka... attempt $i/30"[m
+             sleep 2[m
+           done[m
+ [m
+[36m@@ -53,7 +53,7 @@[m [mjobs:[m
+           docker logs streamforge-kafka[m
+           exit 1[m
+ [m
+[31m-      - name: Create Kafka topic[m
+[32m+[m[32m      - name: Create Kafka topics[m
+         run: |[m
+           docker exec streamforge-kafka \[m
+             /opt/kafka/bin/kafka-topics.sh \[m
+[36m@@ -64,15 +64,33 @@[m [mjobs:[m
+             --replication-factor 1 \[m
+             --bootstrap-server localhost:9092[m
+ [m
+[32m+[m[32m          docker exec streamforge-kafka \[m
+[32m+[m[32m            /opt/kafka/bin/kafka-topics.sh \[m
+[32m+[m[32m            --create \[m
+[32m+[m[32m            --if-not-exists \[m
+[32m+[m[32m            --topic streamforge-state-changelog \[m
+[32m+[m[32m            --partitions 1 \[m
+[32m+[m[32m            --replication-factor 1 \[m
+[32m+[m[32m            --bootstrap-server localhost:9092[m
+[32m+[m
+       - name: Verify Kafka[m
+         run: |[m
+           docker compose ps[m
+[32m+[m
+[32m+[m[32m          echo "Verifying truck-telemetry..."[m
+           docker exec streamforge-kafka \[m
+             /opt/kafka/bin/kafka-topics.sh \[m
+             --describe \[m
+             --topic truck-telemetry \[m
+             --bootstrap-server localhost:9092[m
+ [m
+[32m+[m[32m          echo "Verifying streamforge-state-changelog..."[m
+[32m+[m[32m          docker exec streamforge-kafka \[m
+[32m+[m[32m            /opt/kafka/bin/kafka-topics.sh \[m
+[32m+[m[32m            --describe \[m
+[32m+[m[32m            --topic streamforge-state-changelog \[m
+[32m+[m[32m            --bootstrap-server localhost:9092[m
+[32m+[m
+       - name: Run tests[m
+         run: |[m
+           python -m pytest[m

@@ -66,20 +66,29 @@ def update_dashboard_snapshot(store: RocksDBStore) -> None:
     alerts = get_active_alerts(store)
 
     save_snapshot(
-        {
-            "kafka_status": "Online",
-            "telemetry": [
-                {
-                    "truck": state["truck_id"],
-                    "temperature": state["temperature"],
-                    "timestamp": state["timestamp"],
-                }
-                for state in states
-            ],
-            "alerts": alerts,
-            "metrics": metrics,
-        }
-    )
+    {
+        "kafka_status": "Online",
+        "telemetry": [
+            {
+                "truck": state.get("truck_id"),
+                "temperature": state.get("temperature"),
+                "timestamp": state.get(
+                    "timestamp",
+                    state.get("last_seen_at"),
+                ),
+            }
+            for state in states
+            if state.get("truck_id") is not None
+            and state.get("temperature") is not None
+            and (
+                state.get("timestamp") is not None
+                or state.get("last_seen_at") is not None
+            )
+        ],
+        "alerts": alerts,
+        "metrics": metrics,
+    }
+)
 
 
 def has_local_truck_state(store: RocksDBStore) -> bool:
